@@ -1,0 +1,43 @@
+{
+  "name": "react-native-pure-storage",
+  "version": "1.0.0",
+  "description": "A pure React Native storage solution with no external dependencies",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "test -d android/build && rm -rf android/build || true"
+  },
+  "keywords": [
+    "react-native",
+    "storage",
+    "persist",
+    "native",
+    "android",
+    "ios"
+  ],
+  "author": "Nishant <nishant6692@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nishant6692/react-native-pure-storage.git"
+  },
+  "homepage": "https://github.com/Nishant6692/react-native-pure-storage",
+  "bugs": {
+    "url": "https://github.com/Nishant6692/react-native-pure-storage/issues"
+  },
+  "files": [
+    "android/",
+    "ios/",
+    "index.js",
+    "index.d.ts",
+    "LICENSE",
+    "react-native-pure-storage.podspec",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.60.0"
+  }
+} 
