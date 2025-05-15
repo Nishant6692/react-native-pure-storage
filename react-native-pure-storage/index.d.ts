@@ -4,6 +4,94 @@ declare module 'react-native-pure-storage' {
      * Whether to encrypt the data
      */
     encrypted?: boolean;
+    
+    /**
+     * Skip the in-memory cache for this operation
+     */
+    skipCache?: boolean;
+    
+    /**
+     * Default value to return if the key doesn't exist
+     */
+    default?: any;
+  }
+  
+  export interface CacheOptions {
+    /**
+     * Maximum number of items to keep in cache (0 for unlimited)
+     */
+    maxSize?: number;
+    
+    /**
+     * Time to live in milliseconds (0 for no expiry)
+     */
+    ttl?: number;
+  }
+  
+  export interface StorageEvent {
+    /**
+     * The type of event
+     */
+    type: 'set' | 'remove' | 'clear';
+    
+    /**
+     * The key that changed (undefined for clear events)
+     */
+    key?: string;
+    
+    /**
+     * The new value (undefined for remove and clear events)
+     */
+    value?: any;
+  }
+  
+  export interface CacheStats {
+    /**
+     * Number of cache hits
+     */
+    hits: number;
+    
+    /**
+     * Number of cache misses
+     */
+    misses: number;
+    
+    /**
+     * Number of items set in the cache
+     */
+    sets: number;
+    
+    /**
+     * Number of items evicted from the cache
+     */
+    evictions: number;
+    
+    /**
+     * Current number of items in the cache
+     */
+    size: number;
+    
+    /**
+     * Cache hit rate (between 0 and 1)
+     */
+    hitRate: number;
+  }
+  
+  export interface StorageInstanceOptions {
+    /**
+     * Namespace for the storage instance
+     */
+    namespace?: string;
+    
+    /**
+     * Whether to encrypt all data by default
+     */
+    encrypted?: boolean;
+    
+    /**
+     * Cache configuration or false to disable
+     */
+    cache?: CacheOptions | boolean;
   }
 
   export interface PureStorageInterface {
@@ -29,17 +117,19 @@ declare module 'react-native-pure-storage' {
     /**
      * Get a value for a given key
      * @param key - The key to retrieve the value for
+     * @param options - Optional configuration
      * @returns A promise that resolves to the stored value, or null if not found
      */
-    getItem<T = any>(key: string): Promise<T | null>;
+    getItem<T = any>(key: string, options?: StorageOptions): Promise<T | null>;
 
     /**
      * Synchronously get a value for a given key (when available)
      * @param key - The key to retrieve the value for
+     * @param options - Optional configuration
      * @returns The stored value, or null if not found
      * @throws If synchronous API is not available
      */
-    getItemSync<T = any>(key: string): T | null;
+    getItemSync<T = any>(key: string, options?: StorageOptions): T | null;
 
     /**
      * Remove a value for a given key
@@ -71,9 +161,10 @@ declare module 'react-native-pure-storage' {
     /**
      * Get multiple values for a set of keys
      * @param keys - Array of keys to retrieve
+     * @param options - Optional configuration
      * @returns A promise that resolves to an object of key-value pairs
      */
-    multiGet<T = Record<string, any>>(keys: string[]): Promise<T>;
+    multiGet<T = Record<string, any>>(keys: string[], options?: StorageOptions): Promise<T>;
 
     /**
      * Remove multiple keys and their values
@@ -85,9 +176,62 @@ declare module 'react-native-pure-storage' {
     /**
      * Check if a key exists in storage
      * @param key - The key to check
+     * @param options - Optional configuration
      * @returns A promise that resolves to true if the key exists
      */
-    hasKey(key: string): Promise<boolean>;
+    hasKey(key: string, options?: StorageOptions): Promise<boolean>;
+    
+    /**
+     * Create a new storage instance with its own namespace
+     * @param namespace - The namespace to use
+     * @param options - Optional configuration
+     * @returns A new storage instance
+     */
+    getInstance(namespace: string, options?: StorageInstanceOptions): StorageInstance;
+    
+    /**
+     * Configure the cache
+     * @param options - Cache options or false to disable
+     */
+    configureCache(options: CacheOptions | boolean): void;
+    
+    /**
+     * Add a listener for storage changes
+     * @param callback - The callback to call when any value changes
+     * @returns A function to remove the listener
+     */
+    onChange(callback: (event: StorageEvent) => void): () => void;
+    
+    /**
+     * Add a listener for changes to a specific key
+     * @param key - The key to watch
+     * @param callback - The callback to call when the key changes
+     * @returns A function to remove the listener
+     */
+    onKeyChange(key: string, callback: (event: StorageEvent) => void): () => void;
+    
+    /**
+     * Get cache statistics
+     * @returns Cache statistics
+     */
+    getCacheStats(): CacheStats;
+    
+    /**
+     * Reset cache statistics
+     */
+    resetCacheStats(): void;
+  }
+  
+  export interface StorageInstance extends PureStorageInterface {
+    /**
+     * The namespace for this storage instance
+     */
+    namespace: string;
+    
+    /**
+     * Whether this storage instance encrypts all data by default
+     */
+    encrypted: boolean;
   }
 
   export interface BenchmarkResult {
@@ -119,6 +263,28 @@ declare module 'react-native-pure-storage' {
      * @param iterations - Number of iterations
      */
     compareWith(otherStorage: any, iterations?: number): Promise<void>;
+  }
+  
+  // Error classes
+  export class StorageError extends Error {
+    code: string;
+    constructor(message: string, code?: string);
+  }
+  
+  export class KeyError extends StorageError {
+    constructor(message: string);
+  }
+  
+  export class EncryptionError extends StorageError {
+    constructor(message: string);
+  }
+  
+  export class SerializationError extends StorageError {
+    constructor(message: string);
+  }
+  
+  export class SyncOperationError extends StorageError {
+    constructor(message?: string);
   }
 
   const PureStorage: PureStorageInterface;

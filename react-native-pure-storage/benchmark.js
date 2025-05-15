@@ -1,18 +1,26 @@
 import PureStorage from './index';
 
 /**
- * Benchmark utility for react-native-pure-storage
+ * benchmark.js
+ * 
+ * A simple utility for performance benchmarking
  */
+
 class Benchmark {
+  constructor(storage) {
+    this.storage = storage;
+    this.results = {};
+  }
+
   /**
-   * Run a performance benchmark
+   * Run a single benchmark test
    * @param {string} name - Name of the benchmark
-   * @param {Function} fn - Function to benchmark
-   * @param {number} iterations - Number of iterations to run
-   * @returns {Promise<{name: string, totalTimeMs: number, opsPerSecond: number}>}
+   * @param {Function} fn - Async function to benchmark
+   * @param {number} iterations - Number of iterations (default: 100)
+   * @returns {Promise<{name: string, totalTimeMs: number, opsPerSecond: number}>} Benchmark results
    */
-  static async run(name, fn, iterations = 1000) {
-    console.log(`Starting benchmark: ${name}`);
+  async run(name, fn, iterations = 100) {
+    console.log(`Running benchmark: ${name} (${iterations} iterations)`);
     
     const start = Date.now();
     
@@ -20,170 +28,115 @@ class Benchmark {
       await fn(i);
     }
     
-    const end = Date.now();
-    const totalTimeMs = end - start;
+    const totalTimeMs = Date.now() - start;
     const opsPerSecond = Math.floor((iterations / totalTimeMs) * 1000);
     
-    console.log(`Benchmark ${name}: ${totalTimeMs}ms for ${iterations} operations (${opsPerSecond} ops/sec)`);
-    
-    return {
+    const result = {
       name,
       totalTimeMs,
       opsPerSecond
     };
+    
+    this.results[name] = result;
+    console.log(`Benchmark ${name}: ${opsPerSecond} ops/sec (${totalTimeMs}ms total)`);
+    
+    return result;
   }
-  
+
   /**
-   * Run all benchmarks
-   * @param {number} iterations - Number of iterations for each test
-   * @returns {Promise<Object>} - Results of all benchmarks
+   * Run all standard benchmarks
+   * @param {number} iterations - Number of iterations for each test (default: 100)
+   * @returns {Promise<Object>} Results of all benchmarks
    */
-  static async runAll(iterations = 1000) {
-    // Clean up storage for fair testing
-    await PureStorage.clear();
+  async runAll(iterations = 100) {
+    // Reset results
+    this.results = {};
     
-    const results = {};
+    // Generate a unique key for each test to avoid interference
+    const getKey = (i) => `benchmark_key_${Date.now()}_${i}`;
+    const value = { test: "data", number: 123 };
     
-    // String write test
-    results.stringWrite = await this.run('String Write', async (i) => {
-      await PureStorage.setItem(`benchmark_string_${i}`, `Test value ${i}`);
+    // Standard benchmarks
+    await this.run('setItem', async (i) => {
+      await this.storage.setItem(getKey(i), value);
     }, iterations);
     
-    // String read test
-    results.stringRead = await this.run('String Read', async (i) => {
-      await PureStorage.getItem(`benchmark_string_${i}`);
+    // Setup for getItem test
+    const getKey1 = 'get_benchmark_key';
+    await this.storage.setItem(getKey1, value);
+    
+    await this.run('getItem', async () => {
+      await this.storage.getItem(getKey1);
     }, iterations);
     
-    // Number write test
-    results.numberWrite = await this.run('Number Write', async (i) => {
-      await PureStorage.setItem(`benchmark_number_${i}`, i);
-    }, iterations);
-    
-    // Number read test
-    results.numberRead = await this.run('Number Read', async (i) => {
-      await PureStorage.getItem(`benchmark_number_${i}`);
-    }, iterations);
-    
-    // Object write test
-    results.objectWrite = await this.run('Object Write', async (i) => {
-      await PureStorage.setItem(`benchmark_object_${i}`, { id: i, value: `Test ${i}`, nested: { foo: 'bar' } });
-    }, iterations);
-    
-    // Object read test
-    results.objectRead = await this.run('Object Read', async (i) => {
-      await PureStorage.getItem(`benchmark_object_${i}`);
-    }, iterations);
-    
-    // Batch write test (100 items per batch, 10 batches)
-    const batchIterations = Math.min(10, Math.floor(iterations / 100));
-    results.batchWrite = await this.run('Batch Write (100 items)', async (i) => {
-      const batch = {};
-      for (let j = 0; j < 100; j++) {
-        batch[`batch_${i}_${j}`] = `Batch value ${i}_${j}`;
+    // Setup for multiSet test
+    await this.run('multiSet', async (i) => {
+      const pairs = {};
+      for (let j = 0; j < 5; j++) {
+        pairs[`${getKey(i)}_${j}`] = { value: j };
       }
-      await PureStorage.multiSet(batch);
-    }, batchIterations);
+      await this.storage.multiSet(pairs);
+    }, Math.floor(iterations / 5)); // Fewer iterations for multi operations
     
-    // Batch read test
-    results.batchRead = await this.run('Batch Read (100 items)', async (i) => {
-      const keys = [];
-      for (let j = 0; j < 100; j++) {
-        keys.push(`batch_${i}_${j}`);
-      }
-      await PureStorage.multiGet(keys);
-    }, batchIterations);
-    
-    // Encrypted write test
-    results.encryptedWrite = await this.run('Encrypted Write', async (i) => {
-      await PureStorage.setItem(`benchmark_encrypted_${i}`, `Secret value ${i}`, { encrypted: true });
-    }, Math.floor(iterations / 10)); // Encrypt fewer items as it's slower
-    
-    // Encrypted read test
-    results.encryptedRead = await this.run('Encrypted Read', async (i) => {
-      await PureStorage.getItem(`benchmark_encrypted_${i}`);
-    }, Math.floor(iterations / 10));
-    
-    // Sync write test (if available)
-    try {
-      results.syncWrite = await this.run('Sync Write', (i) => {
-        try {
-          PureStorage.setItemSync(`benchmark_sync_${i}`, `Sync value ${i}`);
-          return Promise.resolve();
-        } catch (e) {
-          return Promise.reject(e);
-        }
-      }, iterations);
-    } catch (e) {
-      console.log('Sync write not available:', e.message);
+    // Setup for multiGet test
+    const multiGetKeys = [];
+    for (let i = 0; i < 5; i++) {
+      const key = `multi_get_key_${i}`;
+      multiGetKeys.push(key);
+      await this.storage.setItem(key, { value: i });
     }
     
-    // Sync read test (if available)
-    try {
-      results.syncRead = await this.run('Sync Read', (i) => {
-        try {
-          PureStorage.getItemSync(`benchmark_sync_${i}`);
-          return Promise.resolve();
-        } catch (e) {
-          return Promise.reject(e);
-        }
-      }, iterations);
-    } catch (e) {
-      console.log('Sync read not available:', e.message);
-    }
+    await this.run('multiGet', async () => {
+      await this.storage.multiGet(multiGetKeys);
+    }, iterations);
     
-    // Clean up
-    await PureStorage.clear();
+    // Remove test
+    await this.run('removeItem', async (i) => {
+      const key = getKey(i);
+      await this.storage.setItem(key, value);
+      await this.storage.removeItem(key);
+    }, iterations);
     
-    return results;
+    console.log('\nBenchmark Summary:');
+    Object.values(this.results).forEach(result => {
+      console.log(`${result.name}: ${result.opsPerSecond} ops/sec`);
+    });
+    
+    return this.results;
   }
-  
+
   /**
-   * Compare with another storage library (if available)
+   * Compare with another storage library
    * @param {Object} otherStorage - Other storage library with compatible API
-   * @param {number} iterations - Number of iterations
+   * @param {number} iterations - Number of iterations (default: 100)
    */
-  static async compareWith(otherStorage, iterations = 1000) {
-    if (!otherStorage) {
-      console.error('No comparison storage provided');
-      return;
+  async compareWith(otherStorage, iterations = 100) {
+    if (!otherStorage || !otherStorage.setItem || !otherStorage.getItem) {
+      throw new Error('Invalid storage provided for comparison');
     }
     
-    // Clear both storages
-    await PureStorage.clear();
-    if (otherStorage.clear) {
-      await otherStorage.clear();
-    }
+    console.log('\nComparing with another storage library...');
     
-    console.log('=== Comparing PureStorage vs Other Storage ===');
+    // Create a new benchmark for the other storage
+    const otherBenchmark = new Benchmark(otherStorage);
     
-    // String write comparison
-    const pureStringWrite = await this.run('PureStorage String Write', async (i) => {
-      await PureStorage.setItem(`compare_string_${i}`, `Test value ${i}`);
-    }, iterations);
+    // Run basic benchmarks on both
+    const ourResults = await this.runAll(iterations);
+    const theirResults = await otherBenchmark.runAll(iterations);
     
-    const otherStringWrite = await this.run('Other Storage String Write', async (i) => {
-      await otherStorage.setItem(`compare_string_${i}`, `Test value ${i}`);
-    }, iterations);
+    console.log('\nComparison Results:');
+    console.log('Operation | PureStorage (ops/sec) | Other (ops/sec) | Difference');
+    console.log('---------:|----------------------:|----------------:|------------');
     
-    // String read comparison
-    const pureStringRead = await this.run('PureStorage String Read', async (i) => {
-      await PureStorage.getItem(`compare_string_${i}`);
-    }, iterations);
-    
-    const otherStringRead = await this.run('Other Storage String Read', async (i) => {
-      await otherStorage.getItem(`compare_string_${i}`);
-    }, iterations);
-    
-    console.log('=== Performance Comparison ===');
-    console.log(`String Write: PureStorage ${pureStringWrite.opsPerSecond} ops/sec vs Other ${otherStringWrite.opsPerSecond} ops/sec (${Math.round((pureStringWrite.opsPerSecond / otherStringWrite.opsPerSecond) * 100)}%)`);
-    console.log(`String Read: PureStorage ${pureStringRead.opsPerSecond} ops/sec vs Other ${otherStringRead.opsPerSecond} ops/sec (${Math.round((pureStringRead.opsPerSecond / otherStringRead.opsPerSecond) * 100)}%)`);
-    
-    // Clean up
-    await PureStorage.clear();
-    if (otherStorage.clear) {
-      await otherStorage.clear();
-    }
+    Object.keys(ourResults).forEach(name => {
+      const our = ourResults[name].opsPerSecond;
+      const their = theirResults[name].opsPerSecond;
+      const diff = ((our - their) / their * 100).toFixed(2);
+      const faster = our > their ? 'faster' : 'slower';
+      
+      console.log(`${name.padEnd(9)} | ${our.toString().padStart(22)} | ${their.toString().padStart(16)} | ${Math.abs(diff)}% ${faster}`);
+    });
   }
 }
 
-export default Benchmark; 
+module.exports = storage => new Benchmark(storage); 

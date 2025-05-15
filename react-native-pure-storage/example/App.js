@@ -5,256 +5,424 @@ import {
   ScrollView,
   View,
   Text,
-  StatusBar,
   TextInput,
-  TouchableOpacity,
+  Button,
   Alert,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
 
 import PureStorage from 'react-native-pure-storage';
 
-const App = () => {
-  const [key, setKey] = useState('');
-  const [value, setValue] = useState('');
-  const [savedItems, setSavedItems] = useState([]);
-
-  // Load all saved items when the app starts
+const ExampleApp = () => {
+  const [key, setKey] = useState('test_key');
+  const [value, setValue] = useState('Test value');
+  const [storedValue, setStoredValue] = useState(null);
+  const [encrypted, setEncrypted] = useState(false);
+  const [useCache, setUseCache] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [benchmarkResults, setBenchmarkResults] = useState(null);
+  const [instanceName, setInstanceName] = useState('custom');
+  const [currentNamespace, setCurrentNamespace] = useState('default');
+  
+  // Create a custom storage instance
+  const [customInstance, setCustomInstance] = useState(null);
+  
+  // Event notifications
+  const [events, setEvents] = useState([]);
+  
   useEffect(() => {
-    loadAllItems();
+    // Set up event listeners
+    const unsubscribe = PureStorage.onChange(event => {
+      const timestamp = new Date().toLocaleTimeString();
+      setEvents(prev => [...prev, { ...event, timestamp }].slice(-5));
+    });
+    
+    return () => {
+      unsubscribe();
+    };
   }, []);
-
-  // Function to load all items from storage
-  const loadAllItems = async () => {
+  
+  const handleSetValue = async () => {
     try {
-      const keys = await PureStorage.getAllKeys();
-      const items = [];
+      setIsLoading(true);
+      const storage = customInstance || PureStorage;
       
-      for (const k of keys) {
-        const v = await PureStorage.getItem(k);
-        items.push({ key: k, value: v });
-      }
+      await storage.setItem(key, value, { 
+        encrypted, 
+        skipCache: !useCache 
+      });
       
-      setSavedItems(items);
+      Alert.alert('Success', `Value set for key "${key}"`);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load items: ' + error.message);
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // Function to save an item to storage
-  const saveItem = async () => {
-    if (!key.trim()) {
-      Alert.alert('Error', 'Key cannot be empty');
-      return;
-    }
-
+  
+  const handleGetValue = async () => {
     try {
-      await PureStorage.setItem(key, value);
-      Alert.alert('Success', 'Item saved successfully');
-      setKey('');
-      setValue('');
-      loadAllItems(); // Refresh the list
+      setIsLoading(true);
+      const storage = customInstance || PureStorage;
+      
+      const result = await storage.getItem(key, { 
+        skipCache: !useCache 
+      });
+      
+      setStoredValue(result);
     } catch (error) {
-      Alert.alert('Error', 'Failed to save item: ' + error.message);
+      Alert.alert('Error', error.message);
+      setStoredValue(null);
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // Function to get an item from storage
-  const getItem = async () => {
-    if (!key.trim()) {
-      Alert.alert('Error', 'Key cannot be empty');
-      return;
-    }
-
+  
+  const handleRemoveValue = async () => {
     try {
-      const result = await PureStorage.getItem(key);
-      if (result !== null) {
-        setValue(result);
-        Alert.alert('Success', `Retrieved value: ${result}`);
-      } else {
-        Alert.alert('Not Found', `No value found for key: ${key}`);
+      setIsLoading(true);
+      const storage = customInstance || PureStorage;
+      
+      await storage.removeItem(key);
+      setStoredValue(null);
+      Alert.alert('Success', `Key "${key}" removed`);
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleClearAll = async () => {
+    try {
+      setIsLoading(true);
+      const storage = customInstance || PureStorage;
+      
+      await storage.clear();
+      setStoredValue(null);
+      Alert.alert('Success', 'All keys cleared');
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleRunBenchmark = async () => {
+    try {
+      setIsLoading(true);
+      setBenchmarkResults(null);
+      
+      const results = await PureStorage.Benchmark.runAll(50);
+      setBenchmarkResults(results);
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleCreateInstance = () => {
+    const instance = PureStorage.getInstance(instanceName, {
+      encrypted,
+      cache: {
+        maxSize: 50,
+        ttl: 30000 // 30 seconds
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to get item: ' + error.message);
-    }
+    });
+    
+    setCustomInstance(instance);
+    setCurrentNamespace(instanceName);
+    Alert.alert('Success', `Created instance with namespace "${instanceName}"`);
   };
-
-  // Function to remove an item from storage
-  const removeItem = async () => {
-    if (!key.trim()) {
-      Alert.alert('Error', 'Key cannot be empty');
-      return;
-    }
-
-    try {
-      await PureStorage.removeItem(key);
-      Alert.alert('Success', 'Item removed successfully');
-      setKey('');
-      setValue('');
-      loadAllItems(); // Refresh the list
-    } catch (error) {
-      Alert.alert('Error', 'Failed to remove item: ' + error.message);
-    }
+  
+  const handleResetInstance = () => {
+    setCustomInstance(null);
+    setCurrentNamespace('default');
   };
-
-  // Function to clear all items from storage
-  const clearAll = async () => {
-    try {
-      await PureStorage.clear();
-      Alert.alert('Success', 'All items cleared successfully');
-      setSavedItems([]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to clear items: ' + error.message);
-    }
+  
+  const getCacheStats = () => {
+    const storage = customInstance || PureStorage;
+    const stats = storage.getCacheStats();
+    Alert.alert(
+      'Cache Statistics',
+      `Size: ${stats.size} items\nHits: ${stats.hits}\nMisses: ${stats.misses}\nHit Rate: ${Math.round(stats.hitRate * 100)}%`
+    );
   };
-
+  
   return (
-    <>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.title}>React Native Pure Storage</Text>
-        <Text style={styles.subtitle}>Native Storage Demo</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.header}>React Native Pure Storage</Text>
         
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter key"
-            value={key}
-            onChangeText={setKey}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter value"
-            value={value}
-            onChangeText={setValue}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Current Namespace: {currentNamespace}</Text>
+          {currentNamespace !== 'default' && (
+            <Button 
+              title="Reset to Default" 
+              onPress={handleResetInstance}
+              color="#777"
+            />
+          )}
+        </View>
+        
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Create Instance</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={styles.input}
+              placeholder="Namespace"
+              value={instanceName}
+              onChangeText={setInstanceName}
+            />
+            <Button 
+              title="Create" 
+              onPress={handleCreateInstance}
+            />
+          </View>
+        </View>
+        
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Store and Retrieve</Text>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Key:</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter key"
+              value={key}
+              onChangeText={setKey}
+            />
+          </View>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Value:</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter value"
+              value={value}
+              onChangeText={setValue}
+            />
+          </View>
+          
+          <View style={styles.optionsContainer}>
+            <View style={styles.option}>
+              <Text>Encrypted:</Text>
+              <Switch value={encrypted} onValueChange={setEncrypted} />
+            </View>
+            
+            <View style={styles.option}>
+              <Text>Use Cache:</Text>
+              <Switch value={useCache} onValueChange={setUseCache} />
+            </View>
+          </View>
+          
+          <View style={styles.buttonGroup}>
+            <Button title="Set Value" onPress={handleSetValue} />
+            <Button title="Get Value" onPress={handleGetValue} />
+            <Button title="Remove" onPress={handleRemoveValue} />
+            <Button title="Clear All" onPress={handleClearAll} color="#FF6B6B" />
+          </View>
+          
+          <View style={styles.resultContainer}>
+            <Text style={styles.label}>Stored Value:</Text>
+            <Text style={styles.valueText}>
+              {storedValue !== null
+                ? typeof storedValue === 'object'
+                  ? JSON.stringify(storedValue)
+                  : String(storedValue)
+                : 'null'}
+            </Text>
+          </View>
+          
+          <Button 
+            title="Get Cache Stats" 
+            onPress={getCacheStats}
+            color="#777"
           />
         </View>
         
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={saveItem}>
-            <Text style={styles.buttonText}>Save</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.button} onPress={getItem}>
-            <Text style={styles.buttonText}>Get</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.button} onPress={removeItem}>
-            <Text style={styles.buttonText}>Remove</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={[styles.button, styles.dangerButton]} onPress={clearAll}>
-            <Text style={styles.buttonText}>Clear All</Text>
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Events</Text>
+          {events.length === 0 ? (
+            <Text style={styles.emptyText}>No events yet</Text>
+          ) : (
+            events.map((event, index) => (
+              <View key={index} style={styles.eventItem}>
+                <Text style={styles.eventTime}>{event.timestamp}</Text>
+                <Text style={styles.eventType}>{event.type}</Text>
+                <Text style={styles.eventKey}>{event.key || 'all'}</Text>
+              </View>
+            ))
+          )}
         </View>
         
-        <View style={styles.listContainer}>
-          <Text style={styles.listTitle}>Saved Items:</Text>
-          <ScrollView style={styles.list}>
-            {savedItems.length > 0 ? (
-              savedItems.map((item, index) => (
-                <View key={index} style={styles.listItem}>
-                  <Text style={styles.itemKey}>{item.key}:</Text>
-                  <Text style={styles.itemValue}>{item.value}</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Benchmark</Text>
+          <Button 
+            title="Run Benchmark" 
+            onPress={handleRunBenchmark}
+          />
+          
+          {benchmarkResults && (
+            <View style={styles.benchmarkResults}>
+              <Text style={styles.benchmarkTitle}>Results (operations per second):</Text>
+              {Object.entries(benchmarkResults).map(([name, result]) => (
+                <View key={name} style={styles.benchmarkRow}>
+                  <Text style={styles.benchmarkName}>{name}:</Text>
+                  <Text style={styles.benchmarkValue}>{result.opsPerSecond} ops/sec</Text>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No items saved</Text>
-            )}
-          </ScrollView>
+              ))}
+            </View>
+          )}
         </View>
-      </SafeAreaView>
-    </>
+        
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0000ff" />
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F9FAFB',
   },
-  title: {
+  scrollContent: {
+    padding: 20,
+  },
+  header: {
     fontSize: 24,
     fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
     color: '#333',
-    textAlign: 'center',
-    marginTop: 10,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
+  section: {
+    backgroundColor: 'white',
+    borderRadius: 10,
     padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#DDD',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  button: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 8,
-    width: '48%',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dangerButton: {
-    backgroundColor: '#F44336',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  listContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#DDD',
-  },
-  listTitle: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 15,
     color: '#333',
   },
-  list: {
-    flex: 1,
+  inputContainer: {
+    marginBottom: 15,
   },
-  listItem: {
-    flexDirection: 'row',
+  label: {
+    marginBottom: 5,
+    fontWeight: '500',
+    color: '#555',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 5,
     padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    backgroundColor: '#FAFAFA',
   },
-  itemKey: {
-    fontWeight: 'bold',
-    marginRight: 5,
-    color: '#333',
+  optionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
   },
-  itemValue: {
-    flex: 1,
-    color: '#666',
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    marginBottom: 15,
+  },
+  resultContainer: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#F0F4F8',
+    borderRadius: 5,
+    marginBottom: 15,
+  },
+  valueText: {
+    fontFamily: 'monospace',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
     textAlign: 'center',
     color: '#999',
-    marginTop: 20,
+    fontStyle: 'italic',
+    padding: 10,
+  },
+  eventItem: {
+    flexDirection: 'row',
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  eventTime: {
+    fontSize: 12,
+    color: '#999',
+    width: 80,
+  },
+  eventType: {
+    fontWeight: 'bold',
+    width: 60,
+    color: '#666',
+  },
+  eventKey: {
+    flex: 1,
+    fontFamily: 'monospace',
+  },
+  benchmarkResults: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#F0F4F8',
+    borderRadius: 5,
+  },
+  benchmarkTitle: {
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  benchmarkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  benchmarkName: {
+    fontWeight: '500',
+  },
+  benchmarkValue: {
+    fontFamily: 'monospace',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 
-export default App; 
+export default ExampleApp; 

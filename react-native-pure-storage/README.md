@@ -1,32 +1,35 @@
 # React Native Pure Storage
 
-A pure React Native storage solution with no external dependencies. This package provides a high-performance key-value storage mechanism using the native capabilities of both Android (SharedPreferences) and iOS (NSUserDefaults).
+A native, asynchronous, and dependency-free solution for key-value storage in React Native applications. This library provides a fast and efficient way to store data with built-in support for caching, encryption, namespaces, and event handling.
 
 ## Features
 
-- 100% native implementation (no external dependencies)
-- High-performance async and sync APIs
-- Support for multiple data types (strings, numbers, booleans, objects)
-- Batch operations for efficient bulk reads/writes
-- Optional AES encryption support
-- Dedicated background thread for storage operations
-- Uses SharedPreferences on Android and NSUserDefaults on iOS
-- Complete TypeScript support
-- Works with React Native 0.60 and above (with autolinking)
+- 🚀 High-performance native storage with in-memory caching
+- 🔒 Optional encryption for sensitive data
+- 🔄 Synchronous API when available (iOS only)
+- 🧩 Support for multiple storage instances with namespaces
+- 📱 Works on both iOS and Android
+- 📦 Zero external dependencies
+- 📊 Built-in benchmarking tools
+- 🔍 Comprehensive error handling
+- 🎧 Event listeners for storage changes
+- 📊 Support for complex data types (objects, arrays, etc.)
 
 ## Installation
 
 ```bash
-npm install react-native-pure-storage --save
+npm install react-native-pure-storage
 # or
 yarn add react-native-pure-storage
 ```
 
 ### Linking
 
-React Native 0.60 and above supports autolinking, so you don't need to run any linking commands.
+#### React Native >= 0.60
 
-For React Native below 0.60, run:
+Autolinking will handle the linking process automatically.
+
+#### React Native < 0.60
 
 ```bash
 react-native link react-native-pure-storage
@@ -34,153 +37,214 @@ react-native link react-native-pure-storage
 
 ## Usage
 
+### Basic Operations
+
 ```javascript
 import PureStorage from 'react-native-pure-storage';
 
-// Store values of any type
-await PureStorage.setItem('stringKey', 'Hello world');
-await PureStorage.setItem('numberKey', 42);
-await PureStorage.setItem('booleanKey', true);
-await PureStorage.setItem('objectKey', { user: 'john', id: 123, active: true });
+// Store values
+await PureStorage.setItem('userId', 123);
+await PureStorage.setItem('userProfile', { name: 'John', age: 30 });
+await PureStorage.setItem('sensitiveData', 'secret', { encrypted: true });
 
-// Store encrypted data
-await PureStorage.setItem('secretKey', 'sensitive data', { encrypted: true });
+// Retrieve values
+const userId = await PureStorage.getItem('userId');
+const userProfile = await PureStorage.getItem('userProfile');
+const secret = await PureStorage.getItem('sensitiveData');
 
-// Retrieve values (type is automatically detected)
-const string = await PureStorage.getItem('stringKey'); // 'Hello world'
-const number = await PureStorage.getItem('numberKey'); // 42
-const boolean = await PureStorage.getItem('booleanKey'); // true
-const object = await PureStorage.getItem('objectKey'); // { user: 'john', id: 123, active: true }
-const secret = await PureStorage.getItem('secretKey'); // 'sensitive data' (automatically decrypted)
-
-// Batch operations
-await PureStorage.multiSet({
-  'user.name': 'John Doe',
-  'user.email': 'john@example.com',
-  'user.preferences': { theme: 'dark', notifications: true }
-});
-
-const userData = await PureStorage.multiGet(['user.name', 'user.email', 'user.preferences']);
-// { 'user.name': 'John Doe', 'user.email': 'john@example.com', ... }
+// Check if a key exists
+const exists = await PureStorage.hasKey('userId');
 
 // Remove items
-await PureStorage.removeItem('stringKey');
-await PureStorage.multiRemove(['user.name', 'user.email']);
+await PureStorage.removeItem('userId');
 
-// Check if key exists
-const hasKey = await PureStorage.hasKey('numberKey');
-
-// Other operations
-const allKeys = await PureStorage.getAllKeys();
+// Clear all storage
 await PureStorage.clear();
+```
 
-// Synchronous operations (when available)
+### Batched Operations
+
+```javascript
+// Store multiple values at once
+await PureStorage.multiSet({
+  userId: 123,
+  username: 'john_doe',
+  lastLogin: new Date().toISOString()
+});
+
+// Get multiple values at once
+const userData = await PureStorage.multiGet(['userId', 'username', 'lastLogin']);
+
+// Remove multiple keys
+await PureStorage.multiRemove(['userId', 'username']);
+```
+
+### Synchronous API (iOS only)
+
+```javascript
 try {
-  PureStorage.setItemSync('offlineKey', 'Instant access');
-  const value = PureStorage.getItemSync('offlineKey');
-  console.log('Sync value:', value);
-} catch (e) {
-  console.warn('Sync operations not available on this platform');
+  // Store value synchronously
+  PureStorage.setItemSync('counter', 42);
+  
+  // Get value synchronously
+  const counter = PureStorage.getItemSync('counter');
+  console.log('Counter:', counter);
+} catch (error) {
+  console.error('Sync operations not supported on this platform');
 }
 ```
 
-## Performance Comparison
+### Namespaced Storage Instances
 
-React Native Pure Storage is significantly faster than AsyncStorage and comparable to MMKV for most operations:
+```javascript
+// Create a storage instance with a specific namespace
+const userStorage = PureStorage.getInstance('user');
+const settingsStorage = PureStorage.getInstance('settings', { encrypted: true });
 
-| Operation | Items | PureStorage | AsyncStorage | MMKV |
-|-----------|-------|-------------|--------------|------|
-| String Write | 1,000 | 980 ops/sec | 120 ops/sec | 1,250 ops/sec |
-| String Read | 1,000 | 3,200 ops/sec | 480 ops/sec | 4,100 ops/sec |
-| Object Write | 1,000 | 720 ops/sec | 90 ops/sec | 920 ops/sec |
-| Object Read | 1,000 | 2,800 ops/sec | 420 ops/sec | 3,600 ops/sec |
-| Batch Write | 100 × 100 | 180 ops/sec | 20 ops/sec | 210 ops/sec |
-| Batch Read | 100 × 100 | 420 ops/sec | 60 ops/sec | 480 ops/sec |
+// Use instances with their own separate storage
+await userStorage.setItem('name', 'John');
+await settingsStorage.setItem('theme', 'dark');
 
-*Note: Performance may vary based on device, data size, and other factors. Run the benchmarks on your specific device for accurate measurements.*
+// Different namespaces don't interfere with each other
+const userName = await userStorage.getItem('name');  // Returns 'John'
+const defaultName = await PureStorage.getItem('name');  // Returns null
+```
+
+### Cache Configuration
+
+```javascript
+// Configure the cache for the default instance
+PureStorage.configureCache({
+  maxSize: 200,  // Maximum items in cache
+  ttl: 300000    // Time to live: 5 minutes (in milliseconds)
+});
+
+// Disable cache
+PureStorage.configureCache(false);
+
+// Skip cache for a specific operation
+const value = await PureStorage.getItem('largeObject', { skipCache: true });
+
+// Get cache statistics
+const stats = PureStorage.getCacheStats();
+console.log('Cache hit rate:', stats.hitRate);
+```
+
+### Event Listeners
+
+```javascript
+// Listen to all storage changes
+const unsubscribe = PureStorage.onChange(event => {
+  console.log(`Storage ${event.type} event:`, event.key, event.value);
+});
+
+// Listen to changes for a specific key
+const keyUnsubscribe = PureStorage.onKeyChange('userId', event => {
+  console.log(`User ID changed to: ${event.value}`);
+});
+
+// Later, remove the listeners
+unsubscribe();
+keyUnsubscribe();
+```
+
+### Error Handling
+
+```javascript
+import { StorageError, KeyError } from 'react-native-pure-storage';
+
+try {
+  await PureStorage.setItem('user', userData);
+} catch (error) {
+  if (error instanceof KeyError) {
+    console.error('Invalid key:', error.message);
+  } else if (error instanceof StorageError) {
+    console.error(`Storage error (${error.code}):`, error.message);
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+### Performance Benchmarking
+
+```javascript
+import PureStorage from 'react-native-pure-storage';
+
+// Run all benchmarks
+const results = await PureStorage.Benchmark.runAll();
+console.log('Benchmark results:', results);
+
+// Run a single benchmark
+const setItemResult = await PureStorage.Benchmark.run('setItem', async (i) => {
+  await PureStorage.setItem(`key_${i}`, { test: i });
+}, 1000);
+
+// Compare with another storage library (e.g., AsyncStorage)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+await PureStorage.Benchmark.compareWith(AsyncStorage);
+```
 
 ## API Reference
 
-### Async Storage Operations
+### Core Methods
 
-#### `setItem(key: string, value: any, options?: StorageOptions): Promise<boolean>`
+- `setItem(key, value, options)`: Store a value for a given key
+- `getItem(key, options)`: Get a value for a given key
+- `removeItem(key)`: Remove a value for a given key
+- `clear()`: Clear all stored values
+- `getAllKeys()`: Get all keys stored in the storage
+- `multiSet(keyValuePairs, options)`: Set multiple key-value pairs at once
+- `multiGet(keys, options)`: Get multiple values for a set of keys
+- `multiRemove(keys)`: Remove multiple keys and their values
+- `hasKey(key, options)`: Check if a key exists in storage
 
-Store a value of any type. Returns a promise that resolves to `true` if successful.
+### Synchronous Methods (iOS Only)
 
-- `key`: The string key to store the value under
-- `value`: The value to store (strings, numbers, booleans, objects)
-- `options`: Optional configuration object with properties:
-  - `encrypted`: Boolean indicating whether to encrypt the data (default: false)
+- `setItemSync(key, value, options)`: Synchronously store a value
+- `getItemSync(key, options)`: Synchronously get a value
 
-#### `getItem<T = any>(key: string): Promise<T | null>`
+### Instance Management
 
-Get the value for a given key. Returns a promise that resolves to the value if found, or `null` if not found.
+- `getInstance(namespace, options)`: Create a storage instance with a namespace
 
-#### `removeItem(key: string): Promise<boolean>`
+### Cache Management
 
-Remove the value for a given key. Returns a promise that resolves to `true` if successful.
+- `configureCache(options)`: Configure the cache settings
+- `getCacheStats()`: Get cache statistics
+- `resetCacheStats()`: Reset cache statistics
 
-#### `multiSet(keyValuePairs: Record<string, any>, options?: StorageOptions): Promise<boolean>`
+### Event Handling
 
-Set multiple key-value pairs at once. Returns a promise that resolves to `true` if successful.
+- `onChange(callback)`: Add a listener for storage changes
+- `onKeyChange(key, callback)`: Add a listener for changes to a specific key
 
-#### `multiGet<T = Record<string, any>>(keys: string[]): Promise<T>`
+### Options
 
-Get multiple values for a set of keys. Returns a promise that resolves to an object mapping keys to values.
+#### Storage Options
 
-#### `multiRemove(keys: string[]): Promise<boolean>`
+- `encrypted`: Whether to encrypt the data (default: false)
+- `skipCache`: Skip the in-memory cache for this operation (default: false)
+- `default`: Default value to return if the key doesn't exist
 
-Remove multiple keys and their values. Returns a promise that resolves to `true` if successful.
+#### Cache Options
 
-#### `hasKey(key: string): Promise<boolean>`
+- `maxSize`: Maximum number of items to keep in cache
+- `ttl`: Time to live in milliseconds
 
-Check if a key exists in storage. Returns a promise that resolves to `true` if the key exists.
+#### Storage Instance Options
 
-#### `getAllKeys(): Promise<string[]>`
+- `namespace`: Namespace for the storage instance
+- `encrypted`: Whether to encrypt all data by default
+- `cache`: Cache configuration or false to disable
 
-Get all keys stored in the storage. Returns a promise that resolves to an array of keys.
+## Error Types
 
-#### `clear(): Promise<boolean>`
-
-Clear all stored values. Returns a promise that resolves to `true` if successful.
-
-### Sync Storage Operations
-
-#### `setItemSync(key: string, value: any, options?: StorageOptions): boolean`
-
-Synchronously store a value. Returns `true` if successful.
-
-*Note: This method may not be available on all platforms. Use in a try/catch block.*
-
-#### `getItemSync<T = any>(key: string): T | null`
-
-Synchronously get a value for a given key. Returns the value if found, or `null` if not found.
-
-*Note: This method may not be available on all platforms. Use in a try/catch block.*
-
-## Benchmark
-
-The library includes a benchmark utility to measure performance:
-
-```javascript
-import { Benchmark } from 'react-native-pure-storage';
-
-// Run all benchmarks
-const results = await Benchmark.runAll();
-console.log(results);
-
-// Compare with another storage library (e.g., MMKV)
-import MMKV from 'react-native-mmkv';
-await Benchmark.compareWith(MMKV);
-```
-
-## Author
-
-Nishant
-
-## Repository
-
-[GitHub Repository](https://github.com/Nishant6692/react-native-pure-storage)
+- `StorageError`: Base error class for storage-related errors
+- `KeyError`: Error for invalid keys
+- `EncryptionError`: Error for encryption/decryption operations
+- `SerializationError`: Error for JSON serialization/deserialization
+- `SyncOperationError`: Error for when synchronous operations aren't available
 
 ## License
 
