@@ -126,20 +126,6 @@ RCT_EXPORT_MODULE();
   return @{@"type": type, @"value": value ?: [NSNull null]};
 }
 
-- (id)processValue:(id)value type:(NSString *)type encrypted:(BOOL)encrypted {
-  if (encrypted && value && ![value isKindOfClass:[NSNull class]]) {
-    return [self encryptString:value];
-  }
-  return value;
-}
-
-- (id)processStoredValue:(id)value encrypted:(BOOL)encrypted {
-  if (encrypted && value && ![value isKindOfClass:[NSNull class]]) {
-    return [self decryptString:value];
-  }
-  return value;
-}
-
 #pragma mark - Exposed Methods
 
 // Set Item
@@ -495,6 +481,78 @@ RCT_EXPORT_METHOD(multiRemove:(NSArray *)keys
       reject(@"ERR_UNEXPECTED_EXCEPTION", exception.reason, nil);
     }
   });
+}
+
+#pragma mark - JSI Implementation
+
+// JSI installation method
++ (void)installJSIBindings:(RCTBridge *)bridge {
+  // Import the implementation from JSIPureStorage.mm
+  extern void installPureStorageJSIBindings(RCTBridge *bridge);
+  installPureStorageJSIBindings(bridge);
+}
+
+// Additional synchronous methods required by the RNPureStorageInterface
+
+- (BOOL)removeItemSync:(NSString *)key {
+  if (!key) {
+    return NO;
+  }
+  
+  @try {
+    NSString *storageKey = [self keyWithPrefix:key];
+    [_defaults removeObjectForKey:storageKey];
+    return YES;
+  } @catch (NSException *exception) {
+    return NO;
+  }
+}
+
+- (BOOL)clearSync {
+  @try {
+    // Get all keys with our prefix
+    NSArray<NSString *> *allKeys = [self getAllKeysSync];
+    
+    for (NSString *key in allKeys) {
+      NSString *storageKey = [self keyWithPrefix:key];
+      [_defaults removeObjectForKey:storageKey];
+    }
+    
+    return YES;
+  } @catch (NSException *exception) {
+    return NO;
+  }
+}
+
+- (NSArray<NSString *> *)getAllKeysSync {
+  @try {
+    NSArray<NSString *> *allKeys = [[_defaults dictionaryRepresentation] allKeys];
+    NSMutableArray<NSString *> *filteredKeys = [NSMutableArray new];
+    NSString *prefix = RNPureStoragePrefix;
+    
+    for (NSString *key in allKeys) {
+      if ([key hasPrefix:prefix] && ![key isEqualToString:RNPureStorageEncryptionKeyName]) {
+        [filteredKeys addObject:[key substringFromIndex:prefix.length]];
+      }
+    }
+    
+    return filteredKeys;
+  } @catch (NSException *exception) {
+    return @[];
+  }
+}
+
+- (BOOL)hasKeySync:(NSString *)key {
+  if (!key) {
+    return NO;
+  }
+  
+  @try {
+    NSString *storageKey = [self keyWithPrefix:key];
+    return [_defaults objectForKey:storageKey] != nil;
+  } @catch (NSException *exception) {
+    return NO;
+  }
 }
 
 @end 

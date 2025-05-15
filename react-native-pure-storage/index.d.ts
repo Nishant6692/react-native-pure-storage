@@ -220,6 +220,72 @@ declare module 'react-native-pure-storage' {
      * Reset cache statistics
      */
     resetCacheStats(): void;
+
+    /**
+     * Access to low-level JSI methods
+     */
+    jsi: {
+      /**
+       * Whether JSI synchronous access is available
+       */
+      isAvailable: boolean;
+      
+      /**
+       * Get all keys synchronously (JSI only)
+       * @returns {Array<string>} Array of keys
+       * @throws {Error} If JSI is not available
+       */
+      getAllKeysSync(): string[];
+      
+      /**
+       * Clear all storage synchronously (JSI only)
+       * @returns {boolean} Success
+       * @throws {Error} If JSI is not available
+       */
+      clearSync(): boolean;
+      
+      /**
+       * Remove an item synchronously (JSI only)
+       * @param key Key to remove
+       * @returns {boolean} Success
+       * @throws {Error} If JSI is not available
+       */
+      removeItemSync(key: string): boolean;
+      
+      /**
+       * Check if a key exists synchronously (JSI only)
+       * @param key Key to check
+       * @returns {boolean} Whether the key exists
+       * @throws {Error} If JSI is not available
+       */
+      hasKeySync(key: string): boolean;
+      
+      /**
+       * Set multiple items synchronously (JSI only)
+       * @param keyValuePairs Object of key-value pairs
+       * @param options Storage options
+       * @returns {boolean} Success
+       * @throws {Error} If JSI is not available
+       */
+      multiSetSync(keyValuePairs: Record<string, any>, options?: StorageOptions): boolean;
+      
+      /**
+       * Get multiple items synchronously (JSI only)
+       * @param keys Array of keys to retrieve
+       * @param options Storage options
+       * @returns {Object} Object of key-value pairs
+       * @throws {Error} If JSI is not available
+       */
+      multiGetSync<T = Record<string, any>>(keys: string[], options?: StorageOptions): T;
+      
+      /**
+       * Remove multiple items synchronously (JSI only)
+       * @param keys Array of keys to remove
+       * @returns {boolean} Success
+       * @throws {Error} If JSI is not available
+       */
+      multiRemoveSync(keys: string[]): boolean;
+    };
   }
   
   export interface StorageInstance extends PureStorageInterface {
@@ -234,37 +300,6 @@ declare module 'react-native-pure-storage' {
     encrypted: boolean;
   }
 
-  export interface BenchmarkResult {
-    name: string;
-    totalTimeMs: number;
-    opsPerSecond: number;
-  }
-
-  export interface BenchmarkInterface {
-    /**
-     * Run a performance benchmark
-     * @param name - Name of the benchmark
-     * @param fn - Function to benchmark
-     * @param iterations - Number of iterations to run
-     * @returns A promise that resolves to the benchmark results
-     */
-    run(name: string, fn: (i: number) => Promise<any>, iterations?: number): Promise<BenchmarkResult>;
-    
-    /**
-     * Run all benchmarks
-     * @param iterations - Number of iterations for each test
-     * @returns A promise that resolves to the results of all benchmarks
-     */
-    runAll(iterations?: number): Promise<Record<string, BenchmarkResult>>;
-    
-    /**
-     * Compare with another storage library (if available)
-     * @param otherStorage - Other storage library with compatible API
-     * @param iterations - Number of iterations
-     */
-    compareWith(otherStorage: any, iterations?: number): Promise<void>;
-  }
-  
   // Error classes
   export class StorageError extends Error {
     code: string;
@@ -288,6 +323,5 @@ declare module 'react-native-pure-storage' {
   }
 
   const PureStorage: PureStorageInterface;
-  export const Benchmark: BenchmarkInterface;
   export default PureStorage;
 } 

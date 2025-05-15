@@ -6,7 +6,7 @@ A native, asynchronous, and dependency-free solution for key-value storage in Re
 
 - 🚀 High-performance native storage with in-memory caching
 - 🔒 Optional encryption for sensitive data
-- 🔄 Synchronous API when available (iOS only)
+- 🔄 True synchronous API via JSI (JavaScript Interface)
 - 🧩 Support for multiple storage instances with namespaces
 - 📱 Works on both iOS and Android
 - 📦 Zero external dependencies
@@ -79,20 +79,42 @@ const userData = await PureStorage.multiGet(['userId', 'username', 'lastLogin'])
 await PureStorage.multiRemove(['userId', 'username']);
 ```
 
-### Synchronous API (iOS only)
+### Synchronous API via JSI
+
+React Native Pure Storage now provides true synchronous access via JSI (JavaScript Interface) on both iOS and Android:
 
 ```javascript
-try {
-  // Store value synchronously
-  PureStorage.setItemSync('counter', 42);
+import PureStorage from 'react-native-pure-storage';
+
+// Check if JSI is available
+if (PureStorage.jsi.isAvailable) {
+  console.log('JSI is available!');
   
-  // Get value synchronously
-  const counter = PureStorage.getItemSync('counter');
-  console.log('Counter:', counter);
-} catch (error) {
-  console.error('Sync operations not supported on this platform');
+  // Use synchronous methods directly
+  PureStorage.setItemSync('counter', 42);
+  const value = PureStorage.getItemSync('counter');
+  console.log('Value:', value); // 42
+  
+  // Advanced synchronous operations
+  const allKeys = PureStorage.jsi.getAllKeysSync();
+  const exists = PureStorage.jsi.hasKeySync('counter');
+  PureStorage.jsi.multiSetSync({ a: 1, b: 2, c: 3 });
+  const values = PureStorage.jsi.multiGetSync(['a', 'b', 'c']);
+  PureStorage.jsi.multiRemoveSync(['a', 'b']);
+  PureStorage.jsi.clearSync();
+} else {
+  console.log('JSI not available, falling back to async methods');
 }
 ```
+
+The JSI integration provides true synchronous access to the storage, allowing you to avoid promise-based code when needed. This is particularly useful for:
+
+- Initial app data loading
+- Form state persistence
+- Critical performance paths
+- Synchronous code that requires storage access
+
+> **Note**: JSI methods throw an error if JSI is not available. Always check `PureStorage.jsi.isAvailable` before using these methods or use try/catch blocks.
 
 ### Namespaced Storage Instances
 
@@ -166,25 +188,6 @@ try {
 }
 ```
 
-### Performance Benchmarking
-
-```javascript
-import PureStorage from 'react-native-pure-storage';
-
-// Run all benchmarks
-const results = await PureStorage.Benchmark.runAll();
-console.log('Benchmark results:', results);
-
-// Run a single benchmark
-const setItemResult = await PureStorage.Benchmark.run('setItem', async (i) => {
-  await PureStorage.setItem(`key_${i}`, { test: i });
-}, 1000);
-
-// Compare with another storage library (e.g., AsyncStorage)
-import AsyncStorage from '@react-native-async-storage/async-storage';
-await PureStorage.Benchmark.compareWith(AsyncStorage);
-```
-
 ## API Reference
 
 ### Core Methods
@@ -199,10 +202,23 @@ await PureStorage.Benchmark.compareWith(AsyncStorage);
 - `multiRemove(keys)`: Remove multiple keys and their values
 - `hasKey(key, options)`: Check if a key exists in storage
 
-### Synchronous Methods (iOS Only)
+### Synchronous Methods
 
 - `setItemSync(key, value, options)`: Synchronously store a value
 - `getItemSync(key, options)`: Synchronously get a value
+
+### JSI Methods (When Available)
+
+Available via the `jsi` property:
+
+- `isAvailable`: Whether JSI synchronous access is available
+- `getAllKeysSync()`: Get all keys synchronously
+- `clearSync()`: Clear all storage synchronously
+- `removeItemSync(key)`: Remove a key synchronously
+- `hasKeySync(key)`: Check if a key exists synchronously
+- `multiSetSync(keyValuePairs, options)`: Set multiple key-value pairs synchronously
+- `multiGetSync(keys, options)`: Get multiple key-value pairs synchronously
+- `multiRemoveSync(keys)`: Remove multiple keys synchronously
 
 ### Instance Management
 

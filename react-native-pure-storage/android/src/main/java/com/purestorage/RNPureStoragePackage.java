@@ -14,6 +14,7 @@ public class RNPureStoragePackage implements ReactPackage {
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
         modules.add(new RNPureStorageModule(reactContext));
+        modules.add(new RNJSIPureStorageModule(reactContext));
         return modules;
     }
 

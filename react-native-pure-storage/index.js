@@ -2,7 +2,7 @@ import { NativeModules, Platform } from 'react-native';
 import { createCache, createNullCache } from './cache';
 import { StorageInstance } from './storage-instance';
 import { StorageError, KeyError, EncryptionError, SerializationError, SyncOperationError } from './errors';
-const createBenchmark = require('./benchmark');
+import JSIStorage from './jsi-storage';
 
 const { RNPureStorage } = NativeModules;
 
@@ -11,7 +11,7 @@ if (!RNPureStorage) {
 }
 
 // Utility functions for serialization/deserialization
-const serializeValue = (value) => {
+export const serializeValue = (value) => {
   if (value === null || value === undefined) {
     return { type: 'null', value: null };
   }
@@ -35,7 +35,7 @@ const serializeValue = (value) => {
   }
 };
 
-const deserializeValue = (item) => {
+export const deserializeValue = (item) => {
   if (!item || !item.type) {
     return null;
   }
@@ -123,6 +123,12 @@ const PureStorage = {
    * @returns {boolean} - Returns true if successful
    */
   setItemSync: (key, value, options = {}) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.setItemSync(key, value, options);
+    }
+    
+    // Fall back to the original implementation
     const success = defaultInstance.setItemSync(key, value, options);
     
     if (success) {
@@ -172,6 +178,12 @@ const PureStorage = {
    * @returns {any} - The stored value, or null if not found
    */
   getItemSync: (key, options = {}) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.getItemSync(key, options);
+    }
+    
+    // Fall back to the original implementation
     return defaultInstance.getItemSync(key, options);
   },
 
@@ -426,14 +438,184 @@ const PureStorage = {
    */
   resetCacheStats: () => {
     defaultInstance.resetCacheStats();
+  },
+
+  // Add information about JSI support
+  jsi: {
+    /**
+     * Whether JSI synchronous access is available
+     */
+    isAvailable: JSIStorage.isAvailable,
+    
+    /**
+     * Get all keys synchronously (JSI only)
+     * @returns {Array<string>} Array of keys
+     * @throws {Error} If JSI is not available
+     */
+    getAllKeysSync: () => {
+      return JSIStorage.getAllKeysSync();
+    },
+    
+    /**
+     * Clear all storage synchronously (JSI only)
+     * @returns {boolean} Success
+     * @throws {Error} If JSI is not available
+     */
+    clearSync: () => {
+      const success = JSIStorage.clearSync();
+      
+      if (success) {
+        // Notify global handlers
+        const event = { type: 'clear' };
+        for (const handler of globalChangeHandlers) {
+          try {
+            handler(event);
+          } catch (error) {
+            console.error('Error in storage change handler:', error);
+          }
+        }
+      }
+      
+      return success;
+    },
+    
+    /**
+     * Remove an item synchronously (JSI only)
+     * @param {string} key Key to remove
+     * @returns {boolean} Success
+     * @throws {Error} If JSI is not available
+     */
+    removeItemSync: (key) => {
+      const success = JSIStorage.removeItemSync(key);
+      
+      if (success) {
+        // Notify global handlers
+        const event = { type: 'remove', key };
+        for (const handler of globalChangeHandlers) {
+          try {
+            handler(event);
+          } catch (error) {
+            console.error('Error in storage change handler:', error);
+          }
+        }
+        
+        // Notify key-specific handlers
+        if (globalKeyHandlers.has(key)) {
+          for (const handler of globalKeyHandlers.get(key)) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error(`Error in handler for key "${key}":`, error);
+            }
+          }
+        }
+      }
+      
+      return success;
+    },
+    
+    /**
+     * Check if a key exists synchronously (JSI only)
+     * @param {string} key Key to check
+     * @returns {boolean} Whether the key exists
+     * @throws {Error} If JSI is not available
+     */
+    hasKeySync: (key) => {
+      return JSIStorage.hasKeySync(key);
+    },
+    
+    /**
+     * Set multiple items synchronously (JSI only)
+     * @param {Object} keyValuePairs Object of key-value pairs
+     * @param {Object} options Storage options
+     * @returns {boolean} Success
+     * @throws {Error} If JSI is not available
+     */
+    multiSetSync: (keyValuePairs, options = {}) => {
+      const success = JSIStorage.multiSetSync(keyValuePairs, options);
+      
+      if (success) {
+        // Notify about each key
+        for (const [key, value] of Object.entries(keyValuePairs)) {
+          // Notify global handlers
+          const event = { type: 'set', key, value };
+          for (const handler of globalChangeHandlers) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error('Error in storage change handler:', error);
+            }
+          }
+          
+          // Notify key-specific handlers
+          if (globalKeyHandlers.has(key)) {
+            for (const handler of globalKeyHandlers.get(key)) {
+              try {
+                handler(event);
+              } catch (error) {
+                console.error(`Error in handler for key "${key}":`, error);
+              }
+            }
+          }
+        }
+      }
+      
+      return success;
+    },
+    
+    /**
+     * Get multiple items synchronously (JSI only)
+     * @param {Array<string>} keys Array of keys to retrieve
+     * @param {Object} options Storage options
+     * @returns {Object} Object of key-value pairs
+     * @throws {Error} If JSI is not available
+     */
+    multiGetSync: (keys, options = {}) => {
+      return JSIStorage.multiGetSync(keys, options);
+    },
+    
+    /**
+     * Remove multiple items synchronously (JSI only)
+     * @param {Array<string>} keys Array of keys to remove
+     * @returns {boolean} Success
+     * @throws {Error} If JSI is not available
+     */
+    multiRemoveSync: (keys) => {
+      const success = JSIStorage.multiRemoveSync(keys);
+      
+      if (success) {
+        // Notify about each key
+        for (const key of keys) {
+          // Notify global handlers
+          const event = { type: 'remove', key };
+          for (const handler of globalChangeHandlers) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error('Error in storage change handler:', error);
+            }
+          }
+          
+          // Notify key-specific handlers
+          if (globalKeyHandlers.has(key)) {
+            for (const handler of globalKeyHandlers.get(key)) {
+              try {
+                handler(event);
+              } catch (error) {
+                console.error(`Error in handler for key "${key}":`, error);
+              }
+            }
+          }
+        }
+      }
+      
+      return success;
+    }
   }
 };
 
 // Export the main API
 const PureStorageAPI = Object.assign({}, defaultInstance);
-
-// Export the Benchmark utility
-PureStorageAPI.Benchmark = createBenchmark(PureStorageAPI);
 
 // Export error classes
 PureStorageAPI.StorageError = StorageError;
