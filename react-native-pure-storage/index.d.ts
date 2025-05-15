@@ -14,6 +14,16 @@ declare module 'react-native-pure-storage' {
      * Default value to return if the key doesn't exist
      */
     default?: any;
+    
+    /**
+     * Whether to compress the data (binary data only)
+     */
+    compression?: boolean;
+    
+    /**
+     * The type of binary data to return: 'ArrayBuffer', 'Uint8Array', etc.
+     */
+    returnType?: 'ArrayBuffer' | 'Uint8Array' | 'Int8Array' | 'Uint16Array' | 'Int16Array' | 'Uint32Array' | 'Int32Array' | 'Float32Array' | 'Float64Array';
   }
   
   export interface CacheOptions {
@@ -277,6 +287,55 @@ declare module 'react-native-pure-storage' {
      * Reset cache statistics
      */
     resetCacheStats(): void;
+
+    /**
+     * Store binary data for a given key
+     * @param key - The key to store the binary data under
+     * @param data - The binary data to store (ArrayBuffer or TypedArray)
+     * @param options - Optional configuration including compression
+     * @returns A promise that resolves to true if successful
+     */
+    setBinaryItem(key: string, data: ArrayBuffer | Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array | Float32Array | Float64Array, options?: StorageOptions): Promise<boolean>;
+
+    /**
+     * Get binary data for a given key
+     * @param key - The key to retrieve the binary data for
+     * @param options - Optional configuration including return type
+     * @returns A promise that resolves to the binary data, or null if not found
+     */
+    getBinaryItem<T extends ArrayBuffer | Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array | Float32Array | Float64Array = Uint8Array>(
+      key: string, 
+      options?: StorageOptions
+    ): Promise<T | null>;
+
+    /**
+     * Synchronously store binary data for a given key
+     * @param key - The key to store the binary data under
+     * @param data - The binary data to store (ArrayBuffer or TypedArray)
+     * @param options - Optional configuration including compression
+     * @returns true if successful
+     * @throws If JSI is not available, or if the data is not binary
+     */
+    setBinaryItemSync(key: string, data: ArrayBuffer | Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array | Float32Array | Float64Array, options?: StorageOptions): boolean;
+
+    /**
+     * Synchronously get binary data for a given key
+     * @param key - The key to retrieve the binary data for
+     * @param options - Optional configuration including return type
+     * @returns The binary data, or null if not found
+     * @throws If JSI is not available, or if the data cannot be converted to binary
+     */
+    getBinaryItemSync<T extends ArrayBuffer | Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array | Float32Array | Float64Array = Uint8Array>(
+      key: string, 
+      options?: StorageOptions
+    ): T | null;
+
+    /**
+     * Check if binary data is cached in memory
+     * @param key - The key to check
+     * @returns Whether the binary data is in cache
+     */
+    isBinaryCached(key: string): boolean;
 
     /**
      * Access to low-level JSI methods

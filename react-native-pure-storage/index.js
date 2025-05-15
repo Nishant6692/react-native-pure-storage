@@ -22,10 +22,132 @@ if (RNJSIPureStorage) {
   console.log('PureStorage: JSI module not available, falling back to async-only operations');
 }
 
+// Utility function for binary data compression
+export const compressBinary = (data) => {
+  if (!(data instanceof Uint8Array)) {
+    // Convert to Uint8Array if needed
+    data = data instanceof ArrayBuffer 
+      ? new Uint8Array(data) 
+      : new Uint8Array(data.buffer);
+  }
+  
+  // Simple run-length encoding compression
+  // Format: [value, count] pairs for repeated values
+  // Non-repeated values are stored as [value, 0]
+  const compressed = [];
+  let currentValue = data[0];
+  let count = 1;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i] === currentValue && count < 255) {
+      count++;
+    } else {
+      compressed.push(currentValue, count);
+      currentValue = data[i];
+      count = 1;
+    }
+  }
+  
+  // Push the last value
+  if (data.length > 0) {
+    compressed.push(currentValue, count);
+  }
+  
+  // Create a typed array from the compressed data
+  const compressedData = new Uint8Array(compressed);
+  
+  // Only return compressed data if it's actually smaller
+  if (compressedData.length < data.length) {
+    return { compressed: compressedData, originalSize: data.length, isCompressed: true };
+  }
+  
+  // If compression doesn't save space, return the original
+  return { compressed: data, originalSize: data.length, isCompressed: false };
+};
+
+// Utility function for binary data decompression
+export const decompressBinary = (compressedData, originalSize, isCompressed) => {
+  // If data wasn't compressed, return as is
+  if (!isCompressed) {
+    return compressedData;
+  }
+  
+  // Decompress run-length encoded data
+  const decompressed = new Uint8Array(originalSize);
+  let writeIndex = 0;
+  
+  for (let i = 0; i < compressedData.length; i += 2) {
+    const value = compressedData[i];
+    const count = compressedData[i+1];
+    
+    if (count === 0) {
+      // Non-repeated value
+      decompressed[writeIndex++] = value;
+    } else {
+      // Repeated value
+      for (let j = 0; j < count; j++) {
+        decompressed[writeIndex++] = value;
+      }
+    }
+  }
+  
+  return decompressed;
+};
+
 // Utility functions for serialization/deserialization
-export const serializeValue = (value) => {
+export const serializeValue = (value, options = {}) => {
   if (value === null || value === undefined) {
     return { type: 'null', value: null };
+  }
+  
+  // Handle ArrayBuffer and typed arrays
+  if (
+    value instanceof ArrayBuffer || 
+    value instanceof Uint8Array || 
+    value instanceof Uint16Array || 
+    value instanceof Uint32Array || 
+    value instanceof Int8Array || 
+    value instanceof Int16Array || 
+    value instanceof Int32Array || 
+    value instanceof Float32Array || 
+    value instanceof Float64Array
+  ) {
+    // Convert to Uint8Array if it's not already
+    const uint8Array = value instanceof Uint8Array 
+      ? value 
+      : value instanceof ArrayBuffer 
+        ? new Uint8Array(value) 
+        : new Uint8Array(value.buffer);
+    
+    let binaryData = uint8Array;
+    let isCompressed = false;
+    let originalSize = uint8Array.byteLength;
+    
+    // Apply compression if specified
+    if (options.compression) {
+      const compressResult = compressBinary(uint8Array);
+      binaryData = compressResult.compressed;
+      isCompressed = compressResult.isCompressed;
+      originalSize = compressResult.originalSize;
+    }
+    
+    // Convert to Base64 for storage
+    let binary = '';
+    const len = binaryData.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(binaryData[i]);
+    }
+    const base64 = global.btoa ? global.btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+    
+    // Store the original type for proper reconstruction
+    const originalType = value.constructor.name;
+    return { 
+      type: 'binary', 
+      value: base64,
+      binaryType: originalType,
+      isCompressed,
+      originalSize: isCompressed ? originalSize : undefined
+    };
   }
   
   const type = typeof value;
@@ -61,6 +183,49 @@ export const deserializeValue = (item) => {
       return Number(item.value);
     case 'boolean':
       return item.value === 'true';
+    case 'binary': {
+      // Convert from Base64 back to binary
+      const binary = global.atob 
+        ? global.atob(item.value) 
+        : Buffer.from(item.value, 'base64').toString('binary');
+      
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      
+      // Decompress if needed
+      let processedBytes = bytes;
+      if (item.isCompressed) {
+        processedBytes = decompressBinary(bytes, item.originalSize, true);
+      }
+      
+      // Reconstruct the original typed array based on the stored type
+      switch (item.binaryType) {
+        case 'ArrayBuffer':
+          return processedBytes.buffer;
+        case 'Uint8Array':
+          return processedBytes;
+        case 'Uint16Array':
+          return new Uint16Array(processedBytes.buffer);
+        case 'Uint32Array':
+          return new Uint32Array(processedBytes.buffer);
+        case 'Int8Array':
+          return new Int8Array(processedBytes.buffer);
+        case 'Int16Array':
+          return new Int16Array(processedBytes.buffer);
+        case 'Int32Array':
+          return new Int32Array(processedBytes.buffer);
+        case 'Float32Array':
+          return new Float32Array(processedBytes.buffer);
+        case 'Float64Array':
+          return new Float64Array(processedBytes.buffer);
+        default:
+          // Default to Uint8Array if type is unknown
+          return processedBytes;
+      }
+    }
     case 'object':
       try {
         return JSON.parse(item.value);
@@ -691,6 +856,174 @@ const PureStorage = {
    */
   resetCacheStats: () => {
     defaultInstance.resetCacheStats();
+  },
+
+  /**
+   * Store binary data for a given key
+   * @param {string} key - The key to store the binary data under
+   * @param {ArrayBuffer|TypedArray} data - The binary data to store
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.encrypted=false] - Whether to encrypt the data
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @param {boolean} [options.compression=false] - Whether to compress the data using RLE
+   * @returns {Promise<boolean>} - A promise that resolves to true if successful
+   */
+  setBinaryItem: (key, data, options = {}) => {
+    if (!(data instanceof ArrayBuffer) && 
+        !(data instanceof Uint8Array) && 
+        !(data instanceof Uint16Array) && 
+        !(data instanceof Uint32Array) && 
+        !(data instanceof Int8Array) && 
+        !(data instanceof Int16Array) && 
+        !(data instanceof Int32Array) && 
+        !(data instanceof Float32Array) && 
+        !(data instanceof Float64Array)) {
+      throw new SerializationError('Data must be an ArrayBuffer or TypedArray');
+    }
+    
+    return PureStorage.setItem(key, data, options);
+  },
+  
+  /**
+   * Get binary data for a given key
+   * @param {string} key - The key to retrieve the binary data for
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @param {string} [options.returnType='Uint8Array'] - The type of binary data to return: 'ArrayBuffer', 'Uint8Array', etc.
+   * @returns {Promise<ArrayBuffer|TypedArray|null>} - A promise that resolves to the binary data, or null if not found
+   */
+  getBinaryItem: async (key, options = {}) => {
+    const value = await PureStorage.getItem(key, options);
+    
+    if (value === null) {
+      return null;
+    }
+    
+    // If the value isn't binary, convert it if possible
+    if (!(value instanceof ArrayBuffer) && 
+        !(value instanceof Uint8Array) && 
+        !(value instanceof Uint16Array) && 
+        !(value instanceof Uint32Array) && 
+        !(value instanceof Int8Array) && 
+        !(value instanceof Int16Array) && 
+        !(value instanceof Int32Array) && 
+        !(value instanceof Float32Array) && 
+        !(value instanceof Float64Array)) {
+      
+      // If value is a string, try to convert it to binary
+      if (typeof value === 'string') {
+        const binary = unescape(encodeURIComponent(value));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+      
+      throw new SerializationError('Retrieved value is not binary data');
+    }
+    
+    // Convert to the requested return type if needed
+    const returnType = options.returnType || 'Uint8Array';
+    if (returnType === 'ArrayBuffer' && !(value instanceof ArrayBuffer)) {
+      return value.buffer.slice(0);
+    } else if (returnType === 'Uint8Array' && !(value instanceof Uint8Array)) {
+      return new Uint8Array(value instanceof ArrayBuffer ? value : value.buffer);
+    }
+    
+    return value;
+  },
+  
+  /**
+   * Synchronously store binary data for a given key
+   * @param {string} key - The key to store the binary data under
+   * @param {ArrayBuffer|TypedArray} data - The binary data to store
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.encrypted=false] - Whether to encrypt the data
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @param {boolean} [options.compression=false] - Whether to compress the data using RLE
+   * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available or if data is not binary
+   */
+  setBinaryItemSync: (key, data, options = {}) => {
+    if (!(data instanceof ArrayBuffer) && 
+        !(data instanceof Uint8Array) && 
+        !(data instanceof Uint16Array) && 
+        !(data instanceof Uint32Array) && 
+        !(data instanceof Int8Array) && 
+        !(data instanceof Int16Array) && 
+        !(data instanceof Int32Array) && 
+        !(data instanceof Float32Array) && 
+        !(data instanceof Float64Array)) {
+      throw new SerializationError('Data must be an ArrayBuffer or TypedArray');
+    }
+    
+    return PureStorage.setItemSync(key, data, options);
+  },
+  
+  /**
+   * Synchronously get binary data for a given key
+   * @param {string} key - The key to retrieve the binary data for
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @param {string} [options.returnType='Uint8Array'] - The type of binary data to return: 'ArrayBuffer', 'Uint8Array', etc.
+   * @returns {ArrayBuffer|TypedArray|null} - The binary data, or null if not found
+   * @throws {Error} - If JSI is not available or if the data cannot be converted to binary
+   */
+  getBinaryItemSync: (key, options = {}) => {
+    const value = PureStorage.getItemSync(key, options);
+    
+    if (value === null) {
+      return null;
+    }
+    
+    // If the value isn't binary, convert it if possible
+    if (!(value instanceof ArrayBuffer) && 
+        !(value instanceof Uint8Array) && 
+        !(value instanceof Uint16Array) && 
+        !(value instanceof Uint32Array) && 
+        !(value instanceof Int8Array) && 
+        !(value instanceof Int16Array) && 
+        !(value instanceof Int32Array) && 
+        !(value instanceof Float32Array) && 
+        !(value instanceof Float64Array)) {
+      
+      // If value is a string, try to convert it to binary
+      if (typeof value === 'string') {
+        const binary = unescape(encodeURIComponent(value));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+      
+      throw new SerializationError('Retrieved value is not binary data');
+    }
+    
+    // Convert to the requested return type if needed
+    const returnType = options.returnType || 'Uint8Array';
+    if (returnType === 'ArrayBuffer' && !(value instanceof ArrayBuffer)) {
+      return value.buffer.slice(0);
+    } else if (returnType === 'Uint8Array' && !(value instanceof Uint8Array)) {
+      return new Uint8Array(value instanceof ArrayBuffer ? value : value.buffer);
+    }
+    
+    return value;
+  },
+  
+  /**
+   * Check if binary data is cached in memory
+   * @param {string} key - The key to check
+   * @returns {boolean} - Whether the binary data is in cache
+   */
+  isBinaryCached: (key) => {
+    if (!memoryCache) return false;
+    
+    const cached = memoryCache.get(key);
+    if (!cached) return false;
+    
+    return cached.type === 'binary';
   },
 
   // Add information about JSI support

@@ -7,6 +7,8 @@ A native, asynchronous, and dependency-free solution for key-value storage in Re
 - 🚀 High-performance native storage with in-memory caching
 - 🔒 Optional encryption for sensitive data
 - 🔄 True synchronous API via JSI (JavaScript Interface)
+- 📊 Binary data storage (ArrayBuffers, TypedArrays)
+- 🗜️ Built-in compression for binary data
 - 🧩 Support for multiple storage instances with namespaces
 - 📱 Works on both iOS and Android
 - 📦 Zero external dependencies
@@ -300,6 +302,151 @@ try {
 }
 ```
 
+### Binary Data Storage
+
+```javascript
+import PureStorage from 'react-native-pure-storage';
+
+// Store binary data
+const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
+await PureStorage.setBinaryItem('binaryKey', binaryData);
+
+// Convert an image to binary and store it
+const imageResponse = await fetch('https://example.com/image.jpg');
+const blob = await imageResponse.blob();
+const arrayBuffer = await blob.arrayBuffer();
+const uint8Array = new Uint8Array(arrayBuffer);
+await PureStorage.setBinaryItem('imageKey', uint8Array);
+
+// Retrieve binary data
+const retrievedData = await PureStorage.getBinaryItem('binaryKey');
+console.log('Retrieved data:', retrievedData); // Uint8Array
+
+// Synchronous operations with binary data (when JSI is available)
+if (PureStorage.jsi.isAvailable) {
+  // Save binary data synchronously
+  PureStorage.setBinaryItemSync('syncBinaryKey', binaryData);
+  
+  // Get binary data synchronously
+  const data = PureStorage.getBinaryItemSync('syncBinaryKey');
+  
+  // Specify the return type
+  const arrayBuffer = PureStorage.getBinaryItemSync('syncBinaryKey', {
+    returnType: 'ArrayBuffer'
+  });
+}
+```
+
+### Converting Between Binary and String/Base64
+
+```javascript
+// Converting string to binary
+const text = 'Hello, world!';
+const textEncoder = new TextEncoder();
+const binaryText = textEncoder.encode(text); // Uint8Array
+await PureStorage.setBinaryItem('textAsBinary', binaryText);
+
+// Converting binary back to string
+const retrievedBinary = await PureStorage.getBinaryItem('textAsBinary');
+const textDecoder = new TextDecoder();
+const retrievedText = textDecoder.decode(retrievedBinary);
+console.log(retrievedText); // 'Hello, world!'
+
+// Converting Base64 to binary
+function base64ToBinary(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// Converting binary to Base64
+function binaryToBase64(uint8Array) {
+  let binary = '';
+  const len = uint8Array.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return btoa(binary);
+}
+
+// Usage with images
+const imageBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRg...'; // Image as base64
+const base64Data = imageBase64.split(',')[1];
+const binaryImage = base64ToBinary(base64Data);
+
+await PureStorage.setBinaryItem('imageData', binaryImage);
+
+// Retrieve and display
+const retrievedImage = await PureStorage.getBinaryItem('imageData');
+const retrievedBase64 = binaryToBase64(retrievedImage);
+const imageUri = `data:image/jpeg;base64,${retrievedBase64}`;
+// Use imageUri with Image component
+```
+
+### Binary Data with Compression
+
+```javascript
+import PureStorage from 'react-native-pure-storage';
+
+// Store binary data with compression
+const largeData = new Uint8Array(10000); // 10KB of data
+// Fill with repeating patterns (good for compression)
+for (let i = 0; i < largeData.length; i++) {
+  largeData[i] = i % 256;
+}
+
+// Store with compression enabled
+await PureStorage.setBinaryItem('compressedData', largeData, { 
+  compression: true 
+});
+
+// Retrieve data - compression is automatically handled
+const retrievedData = await PureStorage.getBinaryItem('compressedData');
+console.log(`Retrieved ${retrievedData.length} bytes of data`);
+
+// Compression is most effective with:
+// - Repeating patterns (images with large solid areas)
+// - Sparse data (arrays with lots of zeros or repeated values)
+// - Large binary datasets
+
+// Synchronous operations also support compression
+if (PureStorage.jsi.isAvailable) {
+  PureStorage.setBinaryItemSync('syncCompressedData', largeData, {
+    compression: true,
+    encrypted: true // You can combine compression with encryption
+  });
+  
+  const data = PureStorage.getBinaryItemSync('syncCompressedData');
+  // Data is automatically decompressed
+}
+```
+
+### Binary Data Compression Details
+
+The compression uses a simple Run-Length Encoding (RLE) algorithm that is particularly effective for:
+
+- Images with large areas of similar colors
+- Audio data with silence or constant tones
+- Sensor data with repeated readings
+- Sparse arrays
+
+The compression is automatically applied when you use the `compression: true` option and only used if it actually reduces the data size. Decompression happens automatically when retrieving the data, so your application code doesn't need to handle any compression-specific logic.
+
+```javascript
+// Example: Compressing an image with large solid areas
+const imageData = new Uint8Array(/* ... */);
+await PureStorage.setBinaryItem('compressedImage', imageData, { 
+  compression: true 
+});
+
+// Later, retrieve the image - it's automatically decompressed
+const retrievedImage = await PureStorage.getBinaryItem('compressedImage');
+// Use the image as if it was never compressed
+```
+
 ## API Reference
 
 ### Core Methods
@@ -365,6 +512,46 @@ Available via the `jsi` property:
 - `namespace`: Namespace for the storage instance
 - `encrypted`: Whether to encrypt all data by default
 - `cache`: Cache configuration or false to disable
+
+### Binary Data Methods
+
+- `setBinaryItem(key, data, options)`: Store binary data for a given key
+- `getBinaryItem(key, options)`: Get binary data for a given key
+- `setBinaryItemSync(key, data, options)`: Synchronously store binary data (JSI)
+- `getBinaryItemSync(key, options)`: Synchronously get binary data (JSI)
+- `isBinaryCached(key)`: Check if binary data is cached in memory
+
+### Options for Binary Methods
+
+- `encrypted`: Whether to encrypt the binary data (default: false)
+- `skipCache`: Skip the in-memory cache for this operation (default: false)
+- `returnType`: Type of binary data to return: 'ArrayBuffer', 'Uint8Array', etc. (default: 'Uint8Array')
+- `compression`: Whether to compress the binary data using RLE (default: false)
+
+### Compression API
+
+The library also exposes the compression utilities for advanced use cases:
+
+- `compressBinary(data)`: Compress binary data using RLE, returns `{ compressed, originalSize, isCompressed }`
+- `decompressBinary(compressedData, originalSize, isCompressed)`: Decompress binary data
+
+```javascript
+import { compressBinary, decompressBinary } from 'react-native-pure-storage';
+
+// Manual compression
+const data = new Uint8Array([1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5, 5, 5, 5, 5]);
+const { compressed, originalSize, isCompressed } = compressBinary(data);
+
+console.log(
+  `Original: ${data.length} bytes, ` + 
+  `Compressed: ${compressed.length} bytes, ` +
+  `Ratio: ${((compressed.length / data.length) * 100).toFixed(1)}%`
+);
+
+// Manual decompression
+const decompressed = decompressBinary(compressed, originalSize, isCompressed);
+// decompressed is identical to the original data
+```
 
 ## Error Types
 
