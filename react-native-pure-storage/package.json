@@ -1,6 +1,6 @@
 {
   "name": "react-native-pure-storage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A pure React Native storage solution with no external dependencies",
   "main": "index.js",
   "types": "index.d.ts",
@@ -16,7 +16,7 @@
     "android",
     "ios"
   ],
-  "author": "Nishant <nishant6692@example.com>",
+  "author": "Nishant <nishantkaushal692@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -31,6 +31,7 @@
     "ios/",
     "index.js",
     "index.d.ts",
+    "benchmark.js",
     "LICENSE",
     "react-native-pure-storage.podspec",
     "README.md",
