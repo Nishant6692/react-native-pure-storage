@@ -105,12 +105,12 @@ declare module 'react-native-pure-storage' {
     setItem(key: string, value: any, options?: StorageOptions): Promise<boolean>;
 
     /**
-     * Synchronously store a value for a given key (when available)
+     * Synchronously store a value for a given key (via JSI when available)
      * @param key - The key to store the value under
      * @param value - The value to store (strings, numbers, booleans, objects)
      * @param options - Optional configuration
      * @returns true if successful
-     * @throws If synchronous API is not available
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
      */
     setItemSync(key: string, value: any, options?: StorageOptions): boolean;
 
@@ -123,11 +123,11 @@ declare module 'react-native-pure-storage' {
     getItem<T = any>(key: string, options?: StorageOptions): Promise<T | null>;
 
     /**
-     * Synchronously get a value for a given key (when available)
+     * Synchronously get a value for a given key (via JSI when available)
      * @param key - The key to retrieve the value for
      * @param options - Optional configuration
      * @returns The stored value, or null if not found
-     * @throws If synchronous API is not available
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
      */
     getItemSync<T = any>(key: string, options?: StorageOptions): T | null;
 
@@ -139,16 +139,38 @@ declare module 'react-native-pure-storage' {
     removeItem(key: string): Promise<boolean>;
 
     /**
+     * Synchronously remove a value for a given key (via JSI when available)
+     * @param key - The key to remove
+     * @returns true if successful
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    removeItemSync(key: string): boolean;
+
+    /**
      * Clear all stored values
      * @returns A promise that resolves to true if successful
      */
     clear(): Promise<boolean>;
 
     /**
+     * Synchronously clear all stored values (via JSI when available)
+     * @returns true if successful
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    clearSync(): boolean;
+
+    /**
      * Get all keys stored in the storage
      * @returns A promise that resolves to an array of keys
      */
     getAllKeys(): Promise<string[]>;
+
+    /**
+     * Synchronously get all keys stored in the storage (via JSI when available)
+     * @returns An array of keys
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    getAllKeysSync(): string[];
 
     /**
      * Set multiple key-value pairs at once
@@ -159,12 +181,30 @@ declare module 'react-native-pure-storage' {
     multiSet(keyValuePairs: Record<string, any>, options?: StorageOptions): Promise<boolean>;
 
     /**
+     * Synchronously set multiple key-value pairs at once (via JSI when available)
+     * @param keyValuePairs - Object with key-value pairs to store
+     * @param options - Optional configuration
+     * @returns true if successful
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    multiSetSync(keyValuePairs: Record<string, any>, options?: StorageOptions): boolean;
+
+    /**
      * Get multiple values for a set of keys
      * @param keys - Array of keys to retrieve
      * @param options - Optional configuration
      * @returns A promise that resolves to an object of key-value pairs
      */
     multiGet<T = Record<string, any>>(keys: string[], options?: StorageOptions): Promise<T>;
+
+    /**
+     * Synchronously get multiple values for a set of keys (via JSI when available)
+     * @param keys - Array of keys to retrieve
+     * @param options - Optional configuration
+     * @returns An object of key-value pairs
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    multiGetSync<T = Record<string, any>>(keys: string[], options?: StorageOptions): T;
 
     /**
      * Remove multiple keys and their values
@@ -174,12 +214,29 @@ declare module 'react-native-pure-storage' {
     multiRemove(keys: string[]): Promise<boolean>;
 
     /**
+     * Synchronously remove multiple keys and their values (via JSI when available)
+     * @param keys - Array of keys to remove
+     * @returns true if successful
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    multiRemoveSync(keys: string[]): boolean;
+
+    /**
      * Check if a key exists in storage
      * @param key - The key to check
      * @param options - Optional configuration
      * @returns A promise that resolves to true if the key exists
      */
     hasKey(key: string, options?: StorageOptions): Promise<boolean>;
+
+    /**
+     * Synchronously check if a key exists in storage (via JSI when available)
+     * @param key - The key to check
+     * @param options - Optional configuration
+     * @returns true if the key exists 
+     * @throws If JSI is not available and the platform doesn't support synchronous operations
+     */
+    hasKeySync(key: string, options?: StorageOptions): boolean;
     
     /**
      * Create a new storage instance with its own namespace

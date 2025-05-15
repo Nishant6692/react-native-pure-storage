@@ -116,6 +116,118 @@ The JSI integration provides true synchronous access to the storage, allowing yo
 
 > **Note**: JSI methods throw an error if JSI is not available. Always check `PureStorage.jsi.isAvailable` before using these methods or use try/catch blocks.
 
+### Complete Synchronous API Usage
+
+The synchronous API is accessible in two ways:
+
+1. Via the main API (`PureStorage.setItemSync`, etc.) - more convenient
+2. Via the `jsi` property (`PureStorage.jsi.setItemSync`, etc.) - more explicit
+
+Here's a comprehensive example showing all available synchronous methods:
+
+```javascript
+import PureStorage from 'react-native-pure-storage';
+
+function useSyncStorage() {
+  // Always check if JSI is available before using sync methods
+  if (!PureStorage.jsi.isAvailable) {
+    console.warn('JSI is not available on this device/platform');
+    return;
+  }
+  
+  try {
+    // Basic operations
+    PureStorage.setItemSync('username', 'john_doe');
+    PureStorage.setItemSync('isLoggedIn', true);
+    PureStorage.setItemSync('userProfile', { 
+      id: 123, 
+      name: 'John Doe', 
+      email: 'john@example.com' 
+    });
+    
+    // Encrypted storage for sensitive data
+    PureStorage.setItemSync('accessToken', 'eyJ0eXAiOi...', { encrypted: true });
+    
+    // Read operations
+    const username = PureStorage.getItemSync('username');
+    const isLoggedIn = PureStorage.getItemSync('isLoggedIn');
+    const profile = PureStorage.getItemSync('userProfile');
+    const token = PureStorage.getItemSync('accessToken');
+    
+    console.log(`User ${username} is ${isLoggedIn ? 'logged in' : 'not logged in'}`);
+    console.log(`Profile:`, profile);
+    
+    // Check if keys exist
+    if (PureStorage.hasKeySync('accessToken')) {
+      console.log('User has valid session');
+    }
+    
+    // Get all stored keys
+    const allKeys = PureStorage.getAllKeysSync();
+    console.log('All stored keys:', allKeys);
+    
+    // Batch operations
+    PureStorage.multiSetSync({
+      'preference_theme': 'dark',
+      'preference_notifications': true,
+      'preference_language': 'en-US'
+    });
+    
+    const preferences = PureStorage.multiGetSync([
+      'preference_theme', 
+      'preference_notifications', 
+      'preference_language'
+    ]);
+    
+    console.log('User preferences:', preferences);
+    
+    // Removing data
+    PureStorage.removeItemSync('temporaryData');
+    PureStorage.multiRemoveSync(['oldKey1', 'oldKey2', 'oldKey3']);
+    
+    // Clear all data (use carefully!)
+    // PureStorage.clearSync();
+    
+  } catch (error) {
+    console.error('Error using synchronous storage:', error);
+  }
+}
+```
+
+#### Performance Considerations
+
+Synchronous operations are faster than their asynchronous counterparts, especially for reading operations. However, keep these guidelines in mind:
+
+1. Use synchronous operations for small, critical data that needs immediate access
+2. For large datasets, prefer asynchronous operations to avoid blocking the JS thread
+3. Batch related operations with `multiSetSync`/`multiGetSync` when possible
+4. Always handle errors appropriately, as synchronous operations will throw rather than reject promises
+
+#### Fallback Pattern
+
+For compatibility with devices that don't support JSI, use this pattern:
+
+```javascript
+function getStoredValue(key, defaultValue = null) {
+  try {
+    // Try synchronous access first
+    if (PureStorage.jsi.isAvailable) {
+      return PureStorage.getItemSync(key) ?? defaultValue;
+    }
+  } catch (error) {
+    console.warn('Sync storage access failed:', error);
+  }
+  
+  // Fall back to async (will return a promise)
+  return PureStorage.getItem(key, { default: defaultValue });
+}
+
+// Usage:
+const value = PureStorage.jsi.isAvailable 
+  ? getStoredValue('myKey', 'default') 
+  : await getStoredValue('myKey', 'default');
+```
+
 ### Namespaced Storage Instances
 
 ```javascript

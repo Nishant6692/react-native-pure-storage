@@ -4,10 +4,22 @@ import { StorageInstance } from './storage-instance';
 import { StorageError, KeyError, EncryptionError, SerializationError, SyncOperationError } from './errors';
 import JSIStorage from './jsi-storage';
 
-const { RNPureStorage } = NativeModules;
+const { RNPureStorage, RNJSIPureStorage } = NativeModules;
 
 if (!RNPureStorage) {
   throw new Error(`RNPureStorage module is not linked. Please check the installation instructions.`);
+}
+
+// Initialize JSI if the module is available
+if (RNJSIPureStorage) {
+  try {
+    // This module registers the JSI bindings
+    console.log('PureStorage: JSI module detected, synchronous operations will be available if JSI is supported');
+  } catch (error) {
+    console.warn('PureStorage: Failed to initialize JSI module', error);
+  }
+} else {
+  console.log('PureStorage: JSI module not available, falling back to async-only operations');
 }
 
 // Utility functions for serialization/deserialization
@@ -114,13 +126,14 @@ const PureStorage = {
   },
 
   /**
-   * Synchronously store a value for a given key (when available)
+   * Synchronously store a value for a given key (via JSI when available)
    * @param {string} key - The key to store the value under
    * @param {any} value - The value to store (strings, numbers, booleans, objects)
    * @param {object} [options] - Optional configuration
    * @param {boolean} [options.encrypted=false] - Whether to encrypt the data
    * @param {boolean} [options.skipCache=false] - Whether to skip the cache
    * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
    */
   setItemSync: (key, value, options = {}) => {
     // Try to use JSI if available
@@ -170,12 +183,13 @@ const PureStorage = {
   },
 
   /**
-   * Synchronously get a value for a given key (when available)
+   * Synchronously get a value for a given key (via JSI when available)
    * @param {string} key - The key to retrieve the value for
    * @param {object} [options] - Optional configuration
    * @param {boolean} [options.skipCache=false] - Whether to skip the cache
    * @param {any} [options.default] - Default value if the key doesn't exist
    * @returns {any} - The stored value, or null if not found
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
    */
   getItemSync: (key, options = {}) => {
     // Try to use JSI if available
@@ -222,6 +236,51 @@ const PureStorage = {
   },
 
   /**
+   * Synchronously remove a value for a given key (via JSI when available)
+   * @param {string} key - The key to remove
+   * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  removeItemSync: (key) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.removeItemSync(key);
+    }
+    
+    // Fall back to attempting the native synchronous method if available
+    try {
+      const success = defaultInstance.removeItemSync(key);
+      
+      if (success) {
+        // Notify global handlers
+        const event = { type: 'remove', key };
+        for (const handler of globalChangeHandlers) {
+          try {
+            handler(event);
+          } catch (error) {
+            console.error('Error in storage change handler:', error);
+          }
+        }
+        
+        // Notify key-specific handlers
+        if (globalKeyHandlers.has(key)) {
+          for (const handler of globalKeyHandlers.get(key)) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error(`Error in handler for key "${key}":`, error);
+            }
+          }
+        }
+      }
+      
+      return success;
+    } catch (error) {
+      throw new SyncOperationError("Synchronous removeItem operation not available without JSI");
+    }
+  },
+
+  /**
    * Clear all stored values
    * @returns {Promise<boolean>} - A promise that resolves to true if successful
    */
@@ -244,11 +303,110 @@ const PureStorage = {
   },
 
   /**
+   * Synchronously clear all stored values (via JSI when available)
+   * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  clearSync: () => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      const success = JSIStorage.clearSync();
+      
+      if (success) {
+        // Notify global handlers
+        const event = { type: 'clear' };
+        for (const handler of globalChangeHandlers) {
+          try {
+            handler(event);
+          } catch (error) {
+            console.error('Error in storage change handler:', error);
+          }
+        }
+      }
+      
+      return success;
+    }
+    
+    // Fall back to attempting the native synchronous method if available
+    try {
+      const success = defaultInstance.clearSync();
+      
+      if (success) {
+        // Notify global handlers
+        const event = { type: 'clear' };
+        for (const handler of globalChangeHandlers) {
+          try {
+            handler(event);
+          } catch (error) {
+            console.error('Error in storage change handler:', error);
+          }
+        }
+      }
+      
+      return success;
+    } catch (error) {
+      throw new SyncOperationError("Synchronous clear operation not available without JSI");
+    }
+  },
+
+  /**
    * Get all keys stored in the storage
    * @returns {Promise<Array<string>>} - A promise that resolves to an array of keys
    */
   getAllKeys: () => {
     return defaultInstance.getAllKeys();
+  },
+
+  /**
+   * Synchronously get all keys stored in the storage (via JSI when available)
+   * @returns {Array<string>} - An array of keys
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  getAllKeysSync: () => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.getAllKeysSync();
+    }
+    
+    // Fall back to attempting the native synchronous method if available
+    try {
+      return defaultInstance.getAllKeysSync();
+    } catch (error) {
+      throw new SyncOperationError("Synchronous getAllKeys operation not available without JSI");
+    }
+  },
+
+  /**
+   * Check if a key exists in storage
+   * @param {string} key - The key to check
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @returns {Promise<boolean>} - A promise that resolves to true if the key exists
+   */
+  hasKey: (key, options = {}) => {
+    return defaultInstance.hasKey(key, options);
+  },
+
+  /**
+   * Synchronously check if a key exists in storage (via JSI when available)
+   * @param {string} key - The key to check
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @returns {boolean} - Returns true if the key exists
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  hasKeySync: (key, options = {}) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.hasKeySync(key);
+    }
+    
+    // Fall back to attempting the native synchronous method if available
+    try {
+      return defaultInstance.hasKeySync(key, options);
+    } catch (error) {
+      throw new SyncOperationError("Synchronous hasKey operation not available without JSI");
+    }
   },
   
   /**
@@ -290,6 +448,52 @@ const PureStorage = {
         return success;
       });
   },
+
+  /**
+   * Synchronously set multiple key-value pairs at once (via JSI when available)
+   * @param {Object} keyValuePairs - Object with key-value pairs to store
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.encrypted=false] - Whether to encrypt the data
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  multiSetSync: (keyValuePairs, options = {}) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      const success = JSIStorage.multiSetSync(keyValuePairs, options);
+      
+      if (success) {
+        // Notify about each key
+        for (const [key, value] of Object.entries(keyValuePairs)) {
+          // Notify global handlers
+          const event = { type: 'set', key, value };
+          for (const handler of globalChangeHandlers) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error('Error in storage change handler:', error);
+            }
+          }
+          
+          // Notify key-specific handlers
+          if (globalKeyHandlers.has(key)) {
+            for (const handler of globalKeyHandlers.get(key)) {
+              try {
+                handler(event);
+              } catch (error) {
+                console.error(`Error in handler for key "${key}":`, error);
+              }
+            }
+          }
+        }
+      }
+      
+      return success;
+    }
+    
+    throw new SyncOperationError("Synchronous multiSet operation not available without JSI");
+  },
   
   /**
    * Get multiple values for a set of keys
@@ -300,6 +504,23 @@ const PureStorage = {
    */
   multiGet: (keys, options = {}) => {
     return defaultInstance.multiGet(keys, options);
+  },
+
+  /**
+   * Synchronously get multiple values for a set of keys (via JSI when available)
+   * @param {Array<string>} keys - Array of keys to retrieve
+   * @param {object} [options] - Optional configuration
+   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
+   * @returns {Object} - An object of key-value pairs
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
+   */
+  multiGetSync: (keys, options = {}) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      return JSIStorage.multiGetSync(keys, options);
+    }
+    
+    throw new SyncOperationError("Synchronous multiGet operation not available without JSI");
   },
   
   /**
@@ -338,16 +559,48 @@ const PureStorage = {
         return success;
       });
   },
-  
+
   /**
-   * Check if a key exists in storage
-   * @param {string} key - The key to check
-   * @param {object} [options] - Optional configuration
-   * @param {boolean} [options.skipCache=false] - Whether to skip the cache
-   * @returns {Promise<boolean>} - A promise that resolves to true if the key exists
+   * Synchronously remove multiple keys and their values (via JSI when available)
+   * @param {Array<string>} keys - Array of keys to remove
+   * @returns {boolean} - Returns true if successful
+   * @throws {Error} - If JSI is not available and the platform doesn't support synchronous operations
    */
-  hasKey: (key, options = {}) => {
-    return defaultInstance.hasKey(key, options);
+  multiRemoveSync: (keys) => {
+    // Try to use JSI if available
+    if (JSIStorage.isAvailable) {
+      const success = JSIStorage.multiRemoveSync(keys);
+      
+      if (success) {
+        // Notify about each key
+        for (const key of keys) {
+          // Notify global handlers
+          const event = { type: 'remove', key };
+          for (const handler of globalChangeHandlers) {
+            try {
+              handler(event);
+            } catch (error) {
+              console.error('Error in storage change handler:', error);
+            }
+          }
+          
+          // Notify key-specific handlers
+          if (globalKeyHandlers.has(key)) {
+            for (const handler of globalKeyHandlers.get(key)) {
+              try {
+                handler(event);
+              } catch (error) {
+                console.error(`Error in handler for key "${key}":`, error);
+              }
+            }
+          }
+        }
+      }
+      
+      return success;
+    }
+    
+    throw new SyncOperationError("Synchronous multiRemove operation not available without JSI");
   },
   
   /**
