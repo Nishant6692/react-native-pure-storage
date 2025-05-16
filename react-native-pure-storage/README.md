@@ -9,6 +9,7 @@ A native, asynchronous, and dependency-free solution for key-value storage in Re
 - 🔄 True synchronous API via JSI (JavaScript Interface)
 - 📊 Binary data storage (ArrayBuffers, TypedArrays)
 - 🗜️ Built-in compression for binary data
+- 📁 File and image storage utilities
 - 🧩 Support for multiple storage instances with namespaces
 - 📱 Works on both iOS and Android
 - 📦 Zero external dependencies
@@ -564,3 +565,78 @@ const decompressed = decompressBinary(compressed, originalSize, isCompressed);
 ## License
 
 MIT 
+
+### File and Image Storage
+
+The library includes a dedicated `FileStorage` utility that makes it easy to store and retrieve files and images:
+
+```javascript
+import { FileStorage } from 'react-native-pure-storage';
+
+// Store a file
+const fileUri = 'file:///path/to/document.pdf';
+await FileStorage.storeFile('myPdfKey', fileUri, {
+  compression: true,  // Enable compression (default: true for files)
+  encrypted: true,    // Encrypt the file (optional)
+  metadata: {         // Optional metadata
+    name: 'Important Document.pdf',
+    type: 'application/pdf',
+    tags: ['work', 'important']
+  }
+});
+
+// Retrieve a file
+const { data, metadata } = await FileStorage.getFile('myPdfKey');
+console.log('File metadata:', metadata);
+// data is a Uint8Array containing the file contents
+
+// Save back to filesystem
+const savedPath = await FileStorage.saveToFilesystem(
+  'myPdfKey', 
+  `${FileSystem.DocumentDirectoryPath}/exported-document.pdf`
+);
+console.log('File saved to:', savedPath);
+
+// Store an image
+const imageUri = 'file:///path/to/image.jpg';
+await FileStorage.storeImage('myImageKey', imageUri, {
+  compression: true,   // Enable compression
+  quality: 0.8,        // Image quality (0.0-1.0)
+  format: 'jpeg',      // Format (jpeg or png)
+  metadata: {
+    title: 'My Vacation Photo',
+    tags: ['vacation', 'beach']
+  }
+});
+
+// Retrieve an image as a data URI
+const { uri, metadata } = await FileStorage.getImage('myImageKey');
+// Use the uri directly in an Image component:
+// <Image source={{ uri }} style={styles.image} />
+
+// List all stored files
+const files = await FileStorage.listFiles();
+console.log(`Found ${files.length} files`);
+
+// Filter files by prefix
+const imageFiles = await FileStorage.listFiles('image_');
+
+// Delete a file
+await FileStorage.deleteFile('myPdfKey');
+
+// Get file size
+const fileSize = await FileStorage.getFileSize('myImageKey');
+console.log(`Image size: ${fileSize} bytes`);
+```
+
+#### Additional FileStorage Dependencies
+
+The FileStorage utility has optional dependencies. To use all features, install:
+
+```bash
+npm install react-native-fs expo-image-picker expo-document-picker expo-image-manipulator
+# or
+yarn add react-native-fs expo-image-picker expo-document-picker expo-image-manipulator
+```
+
+These dependencies are loaded dynamically when needed, so you don't need to install them if you don't use the corresponding functionality. 

@@ -440,4 +440,329 @@ declare module 'react-native-pure-storage' {
 
   const PureStorage: PureStorageInterface;
   export default PureStorage;
+
+  // Export FileStorage utilities
+  export interface FileMetadata {
+    /**
+     * Original URI of the file
+     */
+    uri?: string;
+    
+    /**
+     * When the file was stored
+     */
+    dateStored?: string;
+    
+    /**
+     * File format (for images)
+     */
+    format?: string;
+    
+    /**
+     * File width (for images)
+     */
+    width?: number;
+    
+    /**
+     * File height (for images)
+     */
+    height?: number;
+    
+    /**
+     * Original file name
+     */
+    name?: string;
+    
+    /**
+     * File MIME type
+     */
+    type?: string;
+    
+    /**
+     * File size in bytes
+     */
+    size?: number;
+    
+    /**
+     * File title
+     */
+    title?: string;
+    
+    /**
+     * Array of tags
+     */
+    tags?: string[];
+    
+    /**
+     * Any additional metadata
+     */
+    [key: string]: any;
+  }
+  
+  export interface FileStorageOptions extends StorageOptions {
+    /**
+     * Additional metadata to store with the file
+     */
+    metadata?: FileMetadata;
+    
+    /**
+     * Image format (jpeg or png)
+     */
+    format?: 'jpeg' | 'png';
+    
+    /**
+     * Image quality (0.0-1.0)
+     */
+    quality?: number;
+  }
+  
+  export interface FileResult {
+    /**
+     * Binary data of the file
+     */
+    data: Uint8Array | null;
+    
+    /**
+     * File metadata
+     */
+    metadata: FileMetadata | null;
+  }
+  
+  export interface ImageResult {
+    /**
+     * Data URI for the image (data:image/jpeg;base64,...)
+     */
+    uri: string | null;
+    
+    /**
+     * Image metadata
+     */
+    metadata: FileMetadata | null;
+  }
+  
+  export interface FileInfo {
+    /**
+     * Storage key
+     */
+    key: string;
+    
+    /**
+     * File metadata
+     */
+    metadata: FileMetadata | null;
+  }
+  
+  export class FileStorage {
+    /**
+     * Store a file from a URI
+     * @param key - The key to store the file under
+     * @param uri - The URI of the file (file://, content://, etc.)
+     * @param options - Storage options
+     * @returns Whether the operation succeeded
+     */
+    static storeFile(key: string, uri: string, options?: FileStorageOptions): Promise<boolean>;
+    
+    /**
+     * Retrieve a file as a binary object
+     * @param key - The key the file was stored under
+     * @param options - Retrieval options
+     * @returns File data and metadata
+     */
+    static getFile(key: string, options?: StorageOptions): Promise<FileResult>;
+    
+    /**
+     * Store an image from a URI
+     * @param key - The key to store the image under
+     * @param uri - The URI of the image
+     * @param options - Storage options
+     * @returns Whether the operation succeeded
+     */
+    static storeImage(key: string, uri: string, options?: FileStorageOptions): Promise<boolean>;
+    
+    /**
+     * Retrieve an image as a base64 data URI
+     * @param key - The key the image was stored under
+     * @param options - Retrieval options
+     * @returns Image URI and metadata
+     */
+    static getImage(key: string, options?: StorageOptions): Promise<ImageResult>;
+    
+    /**
+     * Save an image or file to the filesystem
+     * @param key - The key the file is stored under
+     * @param destinationPath - Path to save the file to
+     * @param options - Options for retrieval
+     * @returns The path the file was saved to, or null on failure
+     */
+    static saveToFilesystem(key: string, destinationPath: string, options?: StorageOptions): Promise<string | null>;
+    
+    /**
+     * List all stored files
+     * @param prefix - Optional prefix to filter by
+     * @returns List of files
+     */
+    static listFiles(prefix?: string): Promise<FileInfo[]>;
+    
+    /**
+     * Delete a file and its metadata
+     * @param key - The key of the file to delete
+     * @returns Whether the operation succeeded
+     */
+    static deleteFile(key: string): Promise<boolean>;
+    
+    /**
+     * Get the size of a stored file in bytes
+     * @param key - The key of the file
+     * @returns Size in bytes or null if not found
+     */
+    static getFileSize(key: string): Promise<number | null>;
+  }
+  
+  export { FileStorage };
+
+  /**
+   * Decompresses binary data using Run-Length Encoding (RLE)
+   * @param compressedData The compressed data as a Uint8Array
+   * @param originalSize The original size of the uncompressed data
+   * @param isCompressed Whether the data is actually compressed (pass false to return the original)
+   * @returns The decompressed data as a Uint8Array
+   */
+  function decompressBinary(compressedData: Uint8Array, originalSize: number, isCompressed: boolean): Uint8Array;
+
+  /**
+   * Represents metadata associated with a stored file
+   */
+  interface FileMetadata {
+    /** Original URI of the file */
+    uri?: string;
+    /** Date when the file was stored */
+    dateStored?: string;
+    /** File format (jpeg, png, pdf, etc.) */
+    format?: string;
+    /** Image width (for images) */
+    width?: number;
+    /** Image height (for images) */
+    height?: number;
+    /** File name */
+    name?: string;
+    /** MIME type of the file */
+    type?: string;
+    /** File size in bytes */
+    size?: number;
+    /** Title of the file */
+    title?: string;
+    /** Array of tags associated with the file */
+    tags?: string[];
+    /** Any additional metadata */
+    [key: string]: any;
+  }
+
+  /**
+   * Options for file storage operations
+   */
+  interface FileStorageOptions extends StorageOptions {
+    /** File metadata */
+    metadata?: FileMetadata;
+    /** Format to convert the image to (jpeg, png) */
+    format?: 'jpeg' | 'png';
+    /** Quality for image compression (0.0 - 1.0) */
+    quality?: number;
+  }
+
+  /**
+   * Result of a file retrieval operation
+   */
+  interface FileResult {
+    /** The file data as a Uint8Array */
+    data: Uint8Array;
+    /** Metadata associated with the file */
+    metadata?: FileMetadata;
+  }
+
+  /**
+   * Result of an image retrieval operation
+   */
+  interface ImageResult {
+    /** Data URI that can be used directly with Image components */
+    uri: string;
+    /** Metadata associated with the image */
+    metadata?: FileMetadata;
+  }
+
+  /**
+   * Information about a stored file
+   */
+  interface StoredFileInfo {
+    /** The key used to store the file */
+    key: string;
+    /** Metadata associated with the file */
+    metadata?: FileMetadata;
+    /** Size of the file in bytes */
+    size?: number;
+  }
+
+  /**
+   * Utility for storing and retrieving files and images
+   */
+  class FileStorage {
+    /**
+     * Store a file from a URI
+     * @param key The key to store the file under
+     * @param uri URI of the file to store
+     * @param options Storage options including metadata and compression
+     */
+    static storeFile(key: string, uri: string, options?: FileStorageOptions): Promise<void>;
+
+    /**
+     * Retrieve a stored file
+     * @param key The key the file was stored under
+     * @returns The file data and metadata
+     */
+    static getFile(key: string): Promise<FileResult>;
+
+    /**
+     * Store an image from a URI
+     * @param key The key to store the image under
+     * @param uri URI of the image to store
+     * @param options Storage options including format, quality, and metadata
+     */
+    static storeImage(key: string, uri: string, options?: FileStorageOptions): Promise<void>;
+
+    /**
+     * Retrieve a stored image as a data URI
+     * @param key The key the image was stored under
+     * @returns The image as a data URI and metadata
+     */
+    static getImage(key: string): Promise<ImageResult>;
+
+    /**
+     * Save a stored file to the filesystem
+     * @param key The key the file was stored under
+     * @param destinationPath Path to save the file to
+     * @returns The path where the file was saved
+     */
+    static saveToFilesystem(key: string, destinationPath: string): Promise<string>;
+
+    /**
+     * List all stored files
+     * @param prefix Optional prefix to filter files by
+     * @returns Array of stored file information
+     */
+    static listFiles(prefix?: string): Promise<StoredFileInfo[]>;
+
+    /**
+     * Delete a stored file
+     * @param key The key the file was stored under
+     */
+    static deleteFile(key: string): Promise<void>;
+
+    /**
+     * Get the size of a stored file in bytes
+     * @param key The key the file was stored under
+     * @returns The size of the file in bytes
+     */
+    static getFileSize(key: string): Promise<number>;
+  }
+
+  export default PureStorage;
 } 

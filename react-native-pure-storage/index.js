@@ -3,6 +3,7 @@ import { createCache, createNullCache } from './cache';
 import { StorageInstance } from './storage-instance';
 import { StorageError, KeyError, EncryptionError, SerializationError, SyncOperationError } from './errors';
 import JSIStorage from './jsi-storage';
+import FileStorage from './file-storage';
 
 const { RNPureStorage, RNJSIPureStorage } = NativeModules;
 
@@ -1197,7 +1198,13 @@ const PureStorage = {
       
       return success;
     }
-  }
+  },
+
+  // Export compression utilities
+  compressBinary,
+  decompressBinary,
+  // Export file storage utility
+  FileStorage,
 };
 
 // Export the main API
